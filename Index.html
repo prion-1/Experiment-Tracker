@@ -907,6 +907,8 @@ document.getElementById("helpBtn").onclick=()=>{
     </ul>
     <h2>Backup</h2>
     <p><code>Export JSON</code> downloads the full run and step database, including ids and open-ended step fields. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
+    <br>
+    <p>valentin@westmeyerlab</p>
   </main></body></html>`;
   const url=URL.createObjectURL(new Blob([html],{type:"text/html"}));
   const tab=window.open(url,"_blank","noopener");
