@@ -14,8 +14,8 @@ const PROP_SCHEMA_VERSION = 'GANTT_SCHEMA_VERSION';
 const PROP_DATA_VERSION = 'GANTT_DATA_VERSION';
 const PROP_LAST_EDIT   = 'GANTT_LAST_EDIT';
 const PROP_TIME_ZONE   = 'GANTT_TIME_ZONE';
-const SCHEMA_VERSION   = '2';
-const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version'];
+const SCHEMA_VERSION   = '3';
+const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt'];
 const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version'];
 const EDIT_LOG_HEADERS = ['timestamp', 'editor', 'sessionId', 'runCount', 'stepCount'];
 const LOCK_TTL_MS   = 30 * 60 * 1000;  // 30 min — abandoned edit sessions expire
@@ -111,8 +111,13 @@ function _createSpreadsheet(props) {
 }
 
 function _ensureSchemaIfNeeded(ss, props) {
-  if (props.getProperty(PROP_SCHEMA_VERSION) === SCHEMA_VERSION) return;
+  const oldVersion = props.getProperty(PROP_SCHEMA_VERSION);
+  if (oldVersion === SCHEMA_VERSION) return;
   _ensureSchema(ss);
+  if ((Number(oldVersion) || 0) < 3) {
+    _migrateRunStops(ss);
+    _bumpDataVersion();
+  }
   props.setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
   if (!props.getProperty(PROP_DATA_VERSION)) props.setProperty(PROP_DATA_VERSION, '0');
   props.setProperty(PROP_TIME_ZONE, ss.getSpreadsheetTimeZone());
@@ -159,6 +164,72 @@ function _toIso(v, tz) {
     return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
   }
   return String(v || '');
+}
+
+function _isoDay(v, tz) {
+  const iso = _toIso(v, tz);
+  if (!iso) return null;
+  const parts = iso.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(function (n) { return !Number.isFinite(n); })) return null;
+  return Math.round(Date.UTC(parts[0], parts[1] - 1, parts[2]) / 86400000);
+}
+
+function _isoFromDay(day) {
+  return Utilities.formatDate(new Date(day * 86400000), 'UTC', 'yyyy-MM-dd');
+}
+
+function _migrateRunStops(ss) {
+  const tz = _timeZone(ss);
+  const today = _isoDay(_todayIso(tz), tz);
+  const runsSh = ss.getSheetByName(SHEET_NAME_RUNS);
+  const stepsSh = ss.getSheetByName(SHEET_NAME_STEPS);
+  if (!runsSh || runsSh.getLastRow() < 2) return;
+
+  const runHeaders = runsSh.getRange(1, 1, 1, runsSh.getLastColumn()).getValues()[0];
+  const stepHeaders = stepsSh ? stepsSh.getRange(1, 1, 1, stepsSh.getLastColumn()).getValues()[0] : [];
+  const runStoppedCol = runHeaders.indexOf('stoppedAt') + 1;
+  if (!runStoppedCol) return;
+
+  const stepRows = stepsSh && stepsSh.getLastRow() > 1
+    ? stepsSh.getRange(2, 1, stepsSh.getLastRow() - 1, stepsSh.getLastColumn()).getValues()
+    : [];
+  const idx = function (headers, name) { return headers.indexOf(name); };
+  const sId = idx(stepHeaders, 'runId');
+  const sStart = idx(stepHeaders, 'start');
+  const sDur = idx(stepHeaders, 'dur');
+  const sMode = idx(stepHeaders, 'mode');
+  const sStopped = idx(stepHeaders, 'stoppedAt');
+  const spans = {};
+
+  stepRows.forEach(function (row) {
+    const runId = sId >= 0 ? String(row[sId] || '') : '';
+    const start = sStart >= 0 ? _isoDay(row[sStart], tz) : null;
+    if (!runId || start == null) return;
+    const mode = sMode >= 0 && String(row[sMode] || '').toLowerCase() === 'open' ? 'open' : 'fixed';
+    const stopped = sStopped >= 0 ? _isoDay(row[sStopped], tz) : null;
+    const dur = Math.max(Number(sDur >= 0 ? row[sDur] : 0) || 0, 0);
+    let end = start + Math.max(dur || 1, 1) - 1;
+    let activeOpen = false;
+    if (mode === 'open') {
+      activeOpen = stopped == null;
+      end = activeOpen ? today : Math.max(start, stopped);
+    }
+    if (!spans[runId]) spans[runId] = {first: start, last: end, activeOpen: false};
+    spans[runId].first = Math.min(spans[runId].first, start);
+    spans[runId].last = Math.max(spans[runId].last, end);
+    spans[runId].activeOpen = spans[runId].activeOpen || activeOpen;
+  });
+
+  const runRows = runsSh.getRange(2, 1, runsSh.getLastRow() - 1, runsSh.getLastColumn()).getValues();
+  const stoppedValues = runRows.map(function (row) {
+    if (row[runStoppedCol - 1]) return [row[runStoppedCol - 1]];
+    const runId = String(row[0] || '');
+    const span = spans[runId];
+    if (!span) return [_todayIso(tz)];
+    if (span.activeOpen || (span.first <= today && span.last >= today) || span.first > today) return [''];
+    return [_isoFromDay(span.last)];
+  });
+  runsSh.getRange(2, runStoppedCol, stoppedValues.length, 1).setValues(stoppedValues);
 }
 
 function _props() {
@@ -283,13 +354,14 @@ function _readLastEdit(ss) {
   });
 }
 
-function _normalizeRuns(runs) {
+function _normalizeRuns(runs, tz) {
   return (runs || []).map(function (r) {
     return {
       id: String(r.id || _uid()),
       name: String(r.name || ''),
       color: String(r.color || ''),
-      order: Number(r.order) || 0
+      order: Number(r.order) || 0,
+      stoppedAt: _toIso(r.stoppedAt, tz)
     };
   });
 }
@@ -326,7 +398,7 @@ function _loadPayload(ss) {
   const runsRaw  = _readAll(ss, SHEET_NAME_RUNS);
   const stepsRaw = _readAll(ss, SHEET_NAME_STEPS);
   const meta = _metaPayload();
-  meta.runs = _normalizeRuns(runsRaw).map(function (r) {
+  meta.runs = _normalizeRuns(runsRaw, tz).map(function (r) {
     if (!r.color) r.color = '#44d8e0';
     return r;
   });
@@ -439,10 +511,10 @@ function saveAll(sessionId, runs, steps) {
     const tz = _timeZone(ss);
     const rSh = ss.getSheetByName(SHEET_NAME_RUNS);
     const sSh = ss.getSheetByName(SHEET_NAME_STEPS);
-    const normalizedRuns = _normalizeRuns(runs);
+    const normalizedRuns = _normalizeRuns(runs, tz);
     const normalizedSteps = _normalizeSteps(steps, tz);
     const runRows = normalizedRuns.map(function (r) {
-      return [r.id, r.name, r.color, r.order, ''];
+      return [r.id, r.name, r.color, r.order, '', r.stoppedAt];
     });
     const stepRows = normalizedSteps.map(function (s) {
       return [s.id, s.runId, s.name, s.start, s.dur, s.mode, s.stoppedAt, ''];
@@ -494,6 +566,8 @@ function _logDataSheetUrl_() {
 function _forceSchemaMigration_() {
   const ss = SpreadsheetApp.openById(_props().getProperty(PROP_SS_ID));
   _ensureSchema(ss);
+  _migrateRunStops(ss);
+  _bumpDataVersion();
   _props().setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
 }
 

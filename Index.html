@@ -89,7 +89,7 @@
   select:focus,input:focus{border-color:var(--accent)}
   input[type=number]{width:64px}
   .zoom button{width:28px;height:28px;padding:0;font-size:15px;line-height:1}
-  #zoomLabel{font-family:"JetBrains Mono",monospace;color:var(--txt-dim);min-width:46px;text-align:center;font-size:11px}
+  #zoomInput{font-family:"JetBrains Mono",monospace;color:var(--txt-dim);width:52px;text-align:center;font-size:11px;padding:5px 4px}
 
   .gantt-scroll{flex:1;overflow:auto;position:relative;background:var(--bg);font-size:calc(13px * var(--scale))}
   .gantt-scroll::-webkit-scrollbar{height:12px;width:12px}
@@ -130,9 +130,14 @@
   .twirl.collapsed svg{transform:rotate(-90deg)}
   .swatch{width:.85em;min-width:.85em;height:.85em;border-radius:3px;box-shadow:0 1px 0 rgba(255,255,255,.15) inset}
   .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.95em}
-  .row.group .nm{font-weight:600;color:var(--txt)}
+  .row.group .nm{font-weight:600;color:var(--txt);flex:0 1 auto}
   .row.step .label{padding-left:calc(32px * var(--scale))}
   .row.step .nm{color:var(--txt-dim);font-weight:400}
+  .run-state-dot{width:.72em;min-width:.72em;height:.72em;border-radius:50%;margin-left:3px;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 2px 6px rgba(69,82,110,.18)}
+  .run-state-dot.open{background:var(--good)}
+  .run-state-dot.stopped{background:var(--accent-2)}
+  .run-stop{margin-left:4px;white-space:nowrap}
+  .run-spacer{flex:1;min-width:6px}
   .lbl-actions{display:flex;gap:1px;opacity:0;transition:.12s}
   .row:hover .lbl-actions{opacity:1}
   .row.step .lbl-actions.has-stop{opacity:1}
@@ -197,6 +202,23 @@
   .mode-switch input:checked ~ .mode-open{color:var(--accent)}
   .stopbtn{border:1px solid rgba(242,53,114,.35);background:#fff4f7;color:#b81f55;border-radius:999px;padding:2px 8px;font-size:.78em;font-weight:700;cursor:pointer}
   .stopbtn:hover{background:#ffe5ee}
+  .dashboard{border-top:1px solid var(--line);background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px;max-height:150px;overflow:auto}
+  .dash-day{min-width:0}
+  .dash-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:var(--txt);font-size:11px;font-weight:800;text-transform:uppercase}
+  .dash-head span{color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-weight:500;text-transform:none}
+  .dash-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:5px}
+  .dash-item{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--bg-2);cursor:pointer;text-align:left;box-shadow:0 1px 0 rgba(255,255,255,.85) inset}
+  .dash-item:hover{border-color:var(--accent);background:#fff}
+  .dash-swatch{width:9px;min-width:9px;height:9px;border-radius:3px;transform:rotate(45deg);box-shadow:0 1px 0 rgba(255,255,255,.35) inset}
+  .dash-main{min-width:0;flex:1;display:flex;align-items:baseline;gap:6px}
+  .dash-run{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
+  .dash-step{color:var(--txt-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dash-kind{margin-left:auto;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px;white-space:nowrap}
+  .dash-empty{color:var(--txt-faint);font-size:12px;padding:5px 0}
+  @media (max-width:780px){
+    .dashboard{grid-template-columns:1fr;max-height:190px}
+    .dash-list{grid-template-columns:1fr}
+  }
 </style>
 </head><body>
 <div class="app">
@@ -207,9 +229,9 @@
     </div>
     <div class="toolbar-controls">
       <div class="grp"><label>Year</label><select id="yearSel"></select></div>
-      <div class="grp zoom"><label>Zoom</label><button class="btn" id="zoomOut">–</button><span id="zoomLabel">100%</span><button class="btn" id="zoomIn">+</button></div>
+      <div class="grp zoom"><label>Zoom</label><button class="btn" id="zoomOut">–</button><input type="text" id="zoomInput" value="100%" aria-label="Zoom percentage"><button class="btn" id="zoomIn">+</button></div>
       <button class="btn" id="jumpToday">Jump to today</button>
-      <div class="grp"><label>List</label><button class="seg active" id="listAll" type="button">All</button><button class="seg" id="listOngoing" type="button">Ongoing</button></div>
+      <div class="grp"><label>List</label><button class="seg active" id="listAll" type="button">All</button><button class="seg" id="listOngoing" type="button">Ongoing</button><button class="seg" id="listRecent" type="button">Recent</button></div>
       <button class="btn ghost read-only-only" id="refreshBtn" title="Reload from sheet">↻</button>
       <div class="spacer"></div>
       <button class="btn ghost helpbtn" id="helpBtn" title="Help" aria-label="Help">?</button>
@@ -226,6 +248,7 @@
   </div>
 
   <div class="gantt-scroll" id="scroll"><div class="grid" id="grid"><div class="loading">Loading from your Google Sheet…</div></div></div>
+  <div class="dashboard" id="dashboard"></div>
 
   <div class="help">
     <span><b>Read-only by default.</b> Click <b>Unlock to edit</b> to make changes.</span>
@@ -273,7 +296,7 @@ const PALETTE=[
 
 // ---------- date helpers (date-only, DST-safe) ----------
 const MS=86400000;
-let year=new Date().getFullYear(), dayW=26;
+let year=new Date().getFullYear(), dayW=26, zoomPct=100;
 const jan1=()=>Date.UTC(year,0,1);
 const daysInYear=()=>Math.round((Date.UTC(year+1,0,1)-jan1())/MS);
 let serverTodayIso="";
@@ -288,9 +311,13 @@ const WD=["S","M","T","W","T","F","S"];
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=i=>{const d=new Date(jan1()+i*MS);return d.getUTCDate()+" "+MONTHS[d.getUTCMonth()];};
 const isoDay=iso=>{const[y,m,d]=String(iso||dateISO(year,0,1)).split("-").map(Number);return Math.round(Date.UTC(y,m-1,d)/MS);};
+const isoFromDay=day=>new Date(day*MS).toISOString().slice(0,10);
+const addIsoDays=(iso,days)=>isoFromDay(isoDay(iso)+days);
+const fmtIso=iso=>{const d=new Date(isoDay(iso)*MS);return d.getUTCDate()+" "+MONTHS[d.getUTCMonth()]+" "+d.getUTCFullYear();};
 const isOpen=s=>String(s.mode||"fixed").toLowerCase()==="open";
 const isOpenActive=s=>isOpen(s)&&!s.stoppedAt;
 const isMs=s=>!isOpen(s)&&(s.dur||0)===0;
+const runStoppedAt=r=>String(r&&r.stoppedAt||"");
 const stopIsoFor=s=>s.stoppedAt||isoToday();
 function stepEndIndex(s){
   const start=dayIndex(s.start);
@@ -342,7 +369,7 @@ let lockTtlMs=20*60*1000;
 let serverOffsetMs=0;
 let lockRefreshQueued=false;
 let metaRefreshQueued=false;
-let listMode=localStorage.getItem("cct_list_mode")==="ongoing"?"ongoing":"all";
+let listMode=["all","ongoing","recent"].includes(localStorage.getItem("cct_list_mode"))?localStorage.getItem("cct_list_mode"):"all";
 let viewRenderQueued=false;
 let lastViewKey="";
 let lastEdit=null;
@@ -350,14 +377,32 @@ let dataVersion="";
 
 function buildModel(){
   const byRun=new Map();
-  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:r.color,order:r.order||0,collapsed:collapsed.has(r.id),steps:[]}));
+  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:r.color,order:r.order||0,stoppedAt:String(r.stoppedAt||""),collapsed:collapsed.has(r.id),steps:[]}));
   stepsRaw.forEach(s=>{const r=byRun.get(s.runId);if(r)r.steps.push({id:s.id,name:s.name,start:s.start,dur:s.dur||0,mode:s.mode||"fixed",stoppedAt:s.stoppedAt||""});});
   runs=[...byRun.values()].sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name));
   runs.forEach(r=>r.steps.sort((a,b)=>dayIndex(a.start)-dayIndex(b.start)));
 }
 const getRun=id=>runs.find(r=>r.id===id);
 const getStep=(rid,sid)=>{const r=getRun(rid);return r&&r.steps.find(s=>s.id===sid);};
-function runSpan(run){if(!run.steps.length)return null;let a=Infinity,b=-Infinity;run.steps.forEach(s=>{const i=dayIndex(s.start);a=Math.min(a,i);b=Math.max(b,stepEndIndex(s));});return{start:a,end:b};}
+function runBaseSpan(run){
+  if(!run.steps.length)return null;
+  let a=Infinity,b=-Infinity;
+  run.steps.forEach(s=>{const i=dayIndex(s.start);a=Math.min(a,i);b=Math.max(b,stepEndIndex(s));});
+  return{start:a,end:b};
+}
+function runIsOpenCurrent(run){
+  const span=runBaseSpan(run);
+  return !runStoppedAt(run)&&span&&span.start<=dayIndex(isoToday());
+}
+function runSpan(run){
+  const span=runBaseSpan(run);
+  if(!span)return null;
+  let end=span.end;
+  const stopped=runStoppedAt(run);
+  if(stopped)end=Math.max(end,dayIndex(stopped)+1);
+  else if(span.start<=dayIndex(isoToday()))end=Math.max(end,dayIndex(isoToday())+1);
+  return{start:span.start,end};
+}
 
 // ---------- toast ----------
 function toast(msg,ms){
@@ -470,7 +515,7 @@ function applyMeta(payload){
   setEditMode(editMode);
   if(remoteVersion&&dataVersion&&remoteVersion!==dataVersion)return true;
   if(remoteVersion&&!dataVersion)dataVersion=remoteVersion;
-  if(serverTodayIso&&serverTodayIso!==prevToday&&stepsRaw.some(isOpenActive)){buildModel();render();}
+  if(serverTodayIso&&serverTodayIso!==prevToday&&(stepsRaw.some(isOpenActive)||runsRaw.some(r=>!r.stoppedAt))){buildModel();render();}
   return false;
 }
 
@@ -481,7 +526,8 @@ function applyLoad(payload,opts){
   const remoteVersion=syncServerMeta(payload,true);
   const shouldRender=(opts&&opts.force)||!hadData||!remoteVersion||remoteVersion!==prevVersion;
   if(shouldRender){
-    runsRaw=payload.runs||[];stepsRaw=payload.steps||[];
+    runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||"")}));
+    stepsRaw=payload.steps||[];
     buildModel();render();
   }
   setEditMode(editMode); // refresh button states based on new lockInfo
@@ -511,6 +557,7 @@ async function loadIfVersionChanged(remoteVersion){
 
 // ---------- render ----------
 const grid=document.getElementById("grid");
+const dashboard=document.getElementById("dashboard");
 function trackBg(){
   const jw=new Date(jan1()).getUTCDay();let stops=[];
   for(let k=0;k<7;k++){const wd=(jw+k)%7;const col=(wd===0||wd===6)?"var(--weekend)":"transparent";stops.push(col+" "+(k*dayW)+"px "+((k+1)*dayW)+"px");}
@@ -536,7 +583,8 @@ function viewKey(){
   return r.start+":"+r.end+":"+year+":"+dayW+":"+listMode;
 }
 function runsForRender(){
-  if(listMode!=="ongoing")return runs;
+  if(listMode==="all")return runs;
+  if(listMode==="ongoing")return runs.filter(runIsOpenCurrent);
   const range=currentViewRange();
   return runs
     .filter(run=>(editMode&&run.steps.length===0)||run.steps.some(s=>stepIntersectsRange(s,range)))
@@ -578,21 +626,27 @@ function renderHeader(N,trackW,shownRuns){
 
 function renderEmptyState(shownRuns){
   if(shownRuns.length)return "";
-  if(listMode==="ongoing"&&runs.length)return '<div class="empty-hint"><div class="big">No entries in view.</div></div>';
+  if(listMode==="ongoing"&&runs.length)return '<div class="empty-hint"><div class="big">No open-ended runs right now.</div></div>';
+  if(listMode==="recent"&&runs.length)return '<div class="empty-hint"><div class="big">No entries in view.</div></div>';
   if(editMode)return '<div class="empty-hint"><div class="big">No runs yet.</div>Click <b>+ Add run</b> to start.</div>';
   return '<div class="empty-hint"><div class="big">No runs yet.</div>Click <b>🔓 Unlock to edit</b> to add the first one.</div>';
 }
 
 function renderRunRow(run,trackW,bg,labelMinPx,N){
   const span=runSpan(run);
+  const stopped=runStoppedAt(run),openCurrent=runIsOpenCurrent(run);
+  const dot=openCurrent?'<span class="run-state-dot open" title="Run is open-ended"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
+  const stopBtn=!stopped?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
   let h='<div class="row group" data-run="'+run.id+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+run.id+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
-  h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span>';
+  h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span>'+stopBtn+'<span class="run-spacer"></span>'+dot;
   h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+run.id+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+run.id+'" title="Edit run">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
-    h+='<div class="bar summary" data-run="'+run.id+'" data-summary="1" style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+'"><span class="cap l" style="background:'+run.color+'"></span><span class="cap r" style="background:'+run.color+'"></span></div>';
+    const cls="bar summary"+(openCurrent?" open-ended":"")+(stopped?" stopped":"");
+    const suffix=openCurrent?" (open run)":(stopped?" (stopped)":"");
+    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(openCurrent?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span><span class="cap r" style="background:'+run.color+'"></span></div>';
   }
   h+='</div></div>';
   if(!run.collapsed)run.steps.forEach(s=>{h+=renderStepRow(run,s,trackW,bg,labelMinPx,N);});
@@ -619,6 +673,37 @@ function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   return h+'</div></div>';
 }
 
+function dashboardStepKind(s){
+  if(isOpen(s))return "open";
+  if(isMs(s))return "step";
+  return Math.max(Number(s.dur)||1,1)+" d";
+}
+function dashboardItemsForDate(iso){
+  const out=[];
+  runs.forEach(run=>{
+    const stopped=runStoppedAt(run);
+    run.steps.forEach(s=>{
+      if(s.start!==iso)return;
+      if(stopped&&isoDay(s.start)>isoDay(stopped))return;
+      out.push({run,s});
+    });
+  });
+  return out.sort((a,b)=>(a.run.order-b.run.order)||a.run.name.localeCompare(b.run.name)||a.s.name.localeCompare(b.s.name));
+}
+function renderDashboard(){
+  if(!dashboard)return;
+  const today=isoToday();
+  const days=[{label:"Today",iso:today},{label:"Tomorrow",iso:addIsoDays(today,1)}];
+  dashboard.innerHTML=days.map(day=>{
+    const items=dashboardItemsForDate(day.iso);
+    const body=items.length?'<div class="dash-list">'+items.map(item=>{
+      const title=esc(item.run.name+" • "+item.s.name+" • "+fmtIso(item.s.start));
+      return '<button class="dash-item" type="button" data-date="'+esc(day.iso)+'" data-run="'+item.run.id+'" data-step="'+item.s.id+'" title="'+title+'"><span class="dash-swatch" style="background:'+item.run.color+'"></span><span class="dash-main"><span class="dash-run">'+esc(item.run.name)+'</span><span class="dash-step">'+esc(item.s.name)+'</span></span><span class="dash-kind">'+dashboardStepKind(item.s)+'</span></button>';
+    }).join("")+'</div>':'<div class="dash-empty">No scheduled steps.</div>';
+    return '<section class="dash-day"><div class="dash-head">'+day.label+' <span>'+fmtIso(day.iso)+'</span></div>'+body+'</section>';
+  }).join("");
+}
+
 function render(){
   const N=daysInYear(),trackW=N*dayW;
   const shownRuns=runsForRender();
@@ -630,7 +715,8 @@ function render(){
   h+=renderEmptyState(shownRuns);
   shownRuns.forEach(run=>{h+=renderRunRow(run,trackW,bg,labelMinPx,N);});
   grid.innerHTML=h+'</div>';
-  if(listMode==="ongoing")lastViewKey=viewKey();
+  renderDashboard();
+  if(listMode==="recent")lastViewKey=viewKey();
 }
 
 let labelResize=null;
@@ -669,7 +755,7 @@ function onLabelResizeEnd(){
   window.removeEventListener("pointerup",onLabelResizeEnd);
   window.removeEventListener("pointercancel",onLabelResizeEnd);
   setLabelBaseWidth(labelBaseW,true);
-  if(listMode==="ongoing")render();
+  if(listMode==="recent")render();
 }
 
 // ---------- click handler (collapse always works; edit actions gated) ----------
@@ -683,6 +769,20 @@ grid.addEventListener("click",e=>{
   else if(a==="editstep")openStep(rid,sid);
   else if(a==="editrun")openRun(rid);
   else if(a==="stopstep")stopOpenStep(rid,sid);
+  else if(a==="stoprun")stopRun(rid);
+});
+
+dashboard.addEventListener("click",e=>{
+  const item=e.target.closest(".dash-item");if(!item)return;
+  const iso=item.dataset.date;
+  const y=Number(iso.slice(0,4));
+  if(year!==y){
+    year=y;
+    ensureYearOption(year);
+    yearSel.value=String(year);
+    render();
+  }
+  centerIso(iso);
 });
 
 // ---------- drag (gated on editMode) ----------
@@ -693,6 +793,7 @@ grid.addEventListener("pointerdown",e=>{
   e.preventDefault();
   const rid=node.dataset.run,sid=node.dataset.step,summary=node.dataset.summary==="1",N=daysInYear();
   if(node.dataset.open==="1"){openStep(rid,sid);return;}
+  if(node.dataset.runOpen==="1"){openRun(rid);return;}
   if(summary){
     const r=getRun(rid);
     if(r&&r.steps.some(isOpen)){openRun(rid);return;}
@@ -760,7 +861,7 @@ document.getElementById("runSave").onclick=()=>{
   } else {
     const id=newId();
     const order=runsRaw.reduce((m,r)=>Math.max(m,r.order||0),0)+1;
-    runsRaw.push({id,name,color:runColor,order});
+    runsRaw.push({id,name,color:runColor,order,stoppedAt:""});
   }
   buildModel();render();
 };
@@ -795,6 +896,7 @@ document.getElementById("stepSave").onclick=()=>{
   const start=document.getElementById("stepStart").value||dateISO(year,0,1);
   const mode=stepOpenBox.checked?"open":"fixed";
   const dur=mode==="open"?0:(msBox.checked?0:Math.max(1,parseInt(document.getElementById("stepDur").value)||1));
+  const wasActive=stepEditId?stepsRaw.some(x=>x.id===stepEditId&&x.runId===stepRunId&&isOpenActive(x)):false;
   stepModal.classList.remove("open");
   if(stepEditId){
     const s=stepsRaw.find(x=>x.id===stepEditId);
@@ -803,14 +905,50 @@ document.getElementById("stepSave").onclick=()=>{
     const id=newId();
     stepsRaw.push({id,runId:stepRunId,name,start,dur,mode,stoppedAt:""});
   }
+  if(wasActive&&!hasActiveOpenSteps(stepRunId)&&maybePromptStopRun(stepRunId,"Updated step. Run line continues."))return;
   buildModel();render();
 };
+function hasActiveOpenSteps(rid){
+  return stepsRaw.some(s=>s.runId===rid&&isOpenActive(s));
+}
+function stopStepRecord(s,stopIso){
+  const stop=stopIso<s.start?s.start:stopIso;
+  s.stoppedAt=stop;
+  s.dur=Math.max(1,isoDay(stop)-isoDay(s.start)+1);
+}
+function stopIsoForRun(rid){
+  const r=getRun(rid);
+  const span=r?runBaseSpan(r):null;
+  const today=isoToday();
+  return span&&dayIndex(today)<span.start?isoFromIndex(span.start):today;
+}
+function stopRun(rid,opts){
+  const r=runsRaw.find(x=>x.id===rid);
+  if(!r||r.stoppedAt)return;
+  const stop=stopIsoForRun(rid);
+  r.stoppedAt=stop;
+  stepsRaw.forEach(s=>{if(s.runId===rid&&isOpenActive(s))stopStepRecord(s,stop);});
+  if(!opts||!opts.quiet)toast("Stopped run. Save to publish.");
+  buildModel();render();
+}
+function maybePromptStopRun(rid,continueMsg){
+  const r=runsRaw.find(x=>x.id===rid);
+  if(!r||r.stoppedAt||hasActiveOpenSteps(rid))return false;
+  const name=r.name||"this run";
+  if(confirm("All open-ended steps for "+name+" are stopped.\n\nStop the thin run bar too?")){
+    stopRun(rid,{quiet:true});
+    toast("Run line stopped. Save to publish.");
+    return true;
+  }
+  toast(continueMsg||"Run line continues.");
+  buildModel();render();
+  return true;
+}
 function stopOpenStep(rid,sid){
   const s=stepsRaw.find(x=>x.id===sid&&x.runId===rid);
   if(!s||!isOpenActive(s))return;
-  const stop=isoToday()<s.start?s.start:isoToday();
-  s.stoppedAt=stop;
-  s.dur=Math.max(1,isoDay(stop)-isoDay(s.start)+1);
+  stopStepRecord(s,isoToday());
+  if(maybePromptStopRun(rid,"Stopped step. Run line continues."))return;
   toast("Stopped. Save to publish.");
   buildModel();render();
 }
@@ -818,7 +956,10 @@ document.getElementById("stepDelete").onclick=()=>{
   if(!confirm("Delete this step?\n\nThis only affects YOUR draft until you Save."))return;
   stepModal.classList.remove("open");
   const id=stepEditId;
+  const rid=stepRunId;
+  const wasActive=stepsRaw.some(s=>s.id===id&&s.runId===rid&&isOpenActive(s));
   stepsRaw=stepsRaw.filter(s=>s.id!==id);
+  if(wasActive&&!hasActiveOpenSteps(rid)&&maybePromptStopRun(rid,"Deleted step. Run line continues."))return;
   buildModel();render();
 };
 [runModal,stepModal].forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("open");}));
@@ -927,9 +1068,10 @@ document.getElementById("addRunBtn").onclick=()=>openRun(null);
 function syncListToggle(){
   document.getElementById("listAll").classList.toggle("active",listMode==="all");
   document.getElementById("listOngoing").classList.toggle("active",listMode==="ongoing");
+  document.getElementById("listRecent").classList.toggle("active",listMode==="recent");
 }
 function setListMode(mode){
-  listMode=mode==="ongoing"?"ongoing":"all";
+  listMode=["all","ongoing","recent"].includes(mode)?mode:"all";
   localStorage.setItem("cct_list_mode",listMode);
   lastViewKey="";
   syncListToggle();
@@ -937,6 +1079,7 @@ function setListMode(mode){
 }
 document.getElementById("listAll").onclick=()=>setListMode("all");
 document.getElementById("listOngoing").onclick=()=>setListMode("ongoing");
+document.getElementById("listRecent").onclick=()=>setListMode("recent");
 syncListToggle();
 
 const yearSel=document.getElementById("yearSel"),thisY=new Date().getFullYear();
@@ -955,21 +1098,32 @@ function ensureYearOption(y){
   yearSel.insertBefore(o,before||null);
 }
 
-function setZoom(v){
-  dayW=clamp(v,12,56);
-  const scale=clamp(dayW/26,0.85,1.6);
-  document.documentElement.style.setProperty("--scale",scale);
-  document.getElementById("zoomLabel").textContent=Math.round(scale*100)+"%";
+const zoomInput=document.getElementById("zoomInput");
+function parseZoomValue(v){
+  const n=Number(String(v||"").replace("%","").trim());
+  return Number.isFinite(n)?n:zoomPct;
+}
+function setZoomPct(v){
+  zoomPct=clamp(Math.round(parseZoomValue(v)),60,200);
+  dayW=Math.max(10,Math.round(26*zoomPct/100));
+  document.documentElement.style.setProperty("--scale",zoomPct/100);
+  zoomInput.value=zoomPct+"%";
   render();
 }
-document.getElementById("zoomIn").onclick=()=>setZoom(dayW+4);
-document.getElementById("zoomOut").onclick=()=>setZoom(dayW-4);
+document.getElementById("zoomIn").onclick=()=>setZoomPct(zoomPct+10);
+document.getElementById("zoomOut").onclick=()=>setZoomPct(zoomPct-10);
+zoomInput.onfocus=()=>zoomInput.select();
+zoomInput.onblur=()=>setZoomPct(zoomInput.value);
+zoomInput.onkeydown=e=>{
+  if(e.key==="Enter")zoomInput.blur();
+  if(e.key==="Escape"){zoomInput.value=zoomPct+"%";zoomInput.blur();}
+};
 
-function centerToday(){
-  const t=isoToday();
+function centerIso(iso){
   const sc=document.getElementById("scroll");
-  requestAnimationFrame(()=>{sc.scrollLeft=dayIndex(t)*dayW+dayW/2-(sc.clientWidth-labelWidthPx())/2;});
+  requestAnimationFrame(()=>{sc.scrollLeft=dayIndex(iso)*dayW+dayW/2-(sc.clientWidth-labelWidthPx())/2;});
 }
+function centerToday(){centerIso(isoToday());}
 function jumpToToday(){
   const t=isoToday(),todayYear=Number(t.slice(0,4));
   if(year!==todayYear){
@@ -982,7 +1136,7 @@ function jumpToToday(){
 }
 document.getElementById("jumpToday").onclick=jumpToToday;
 document.getElementById("scroll").addEventListener("scroll",()=>{
-  if(listMode!=="ongoing"||viewRenderQueued)return;
+  if(listMode!=="recent"||viewRenderQueued)return;
   viewRenderQueued=true;
   requestAnimationFrame(()=>{
     viewRenderQueued=false;
@@ -991,7 +1145,7 @@ document.getElementById("scroll").addEventListener("scroll",()=>{
   });
 });
 window.addEventListener("resize",()=>{
-  if(listMode==="ongoing")render();
+  if(listMode==="recent")render();
 });
 document.getElementById("refreshBtn").onclick=()=>{
   if(editMode){toast("Already showing your local draft. Save or Cancel first.");return;}
@@ -1002,14 +1156,15 @@ function exportPayload(source){
     exportedAt:new Date(serverNow()).toISOString(),
     source,
     schema:{
-      runs:["id","name","color","order"],
+      runs:["id","name","color","order","stoppedAt"],
       steps:["id","runId","name","start","dur","mode","stoppedAt"]
     },
     runs:runsRaw.map(r=>({
       id:String(r.id||""),
       name:String(r.name||""),
       color:String(r.color||""),
-      order:Number(r.order)||0
+      order:Number(r.order)||0,
+      stoppedAt:String(r.stoppedAt||"")
     })),
     steps:stepsRaw.map(s=>({
       id:String(s.id||""),
@@ -1063,9 +1218,10 @@ document.getElementById("helpBtn").onclick=()=>{
     <h2>Runs and Steps</h2>
     <ul>
       <li><code>Add run</code> creates a row group with its own colour.</li>
+      <li>New runs stay open-ended until their run-level <code>Stop</code> button is used.</li>
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
-      <li><code>Stop</code> fixes an active open-ended step at today. Save to publish the stop.</li>
+      <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
@@ -1073,7 +1229,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
       <li><code>Jump to today</code> switches to the current year and centres today.</li>
-      <li><code>All</code> shows every run. <code>Ongoing</code> shows only entries intersecting the visible timeline.</li>
+      <li><code>All</code> shows every run. <code>Ongoing</code> shows open-ended runs active now. <code>Recent</code> shows entries intersecting the visible timeline.</li>
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
@@ -1105,7 +1261,7 @@ call("loadAll",[]).then(applyLoad).catch(showErr);
 // ---------- background poll: read-only mode only ----------
 setInterval(updateLockCountdown,1000);
 setInterval(()=>{
-  if(stepsRaw.some(isOpenActive)){buildModel();render();}
+  if(stepsRaw.some(isOpenActive)||runsRaw.some(r=>!r.stoppedAt)){buildModel();render();}
 },60000);
 setInterval(()=>{
   if(editMode || inflight>0) return;
