@@ -147,7 +147,8 @@
   .bar{position:absolute;top:50%;transform:translateY(-50%);height:var(--bar-h);border-radius:6px;display:flex;align-items:center;padding:0 7px;font-size:.78em;font-weight:700;cursor:grab;overflow:visible;white-space:nowrap;color:#fff;z-index:10;box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 4px 10px rgba(69,82,110,.22);touch-action:none}
   .bar:hover{filter:brightness(1.08);z-index:12}
   .bar.open-ended{cursor:pointer;border:1px solid rgba(255,255,255,.45)}
-  .bar.open-ended::after{content:"";position:absolute;right:-7px;top:50%;width:8px;height:8px;border-radius:50%;background:inherit;border:2px solid #fff;transform:translateY(-50%);box-shadow:0 2px 6px rgba(69,82,110,.18)}
+  .bar.open-ended:not(.stopped){border-top-right-radius:0;border-bottom-right-radius:0}
+  .bar.open-ended::after{content:"";position:absolute;left:calc(100% - 1px);top:-1px;width:10px;height:calc(100% + 2px);background:inherit;clip-path:polygon(0 0,100% 50%,0 100%);filter:drop-shadow(1px 2px 2px rgba(69,82,110,.18))}
   .bar.open-ended.stopped::after{display:none}
   .bar .nmtxt{overflow:hidden;text-overflow:ellipsis}
   .handle{position:absolute;top:0;bottom:0;width:.45em;cursor:ew-resize;z-index:13}
@@ -202,17 +203,19 @@
   .mode-switch input:checked ~ .mode-open{color:var(--accent)}
   .stopbtn{border:1px solid rgba(242,53,114,.35);background:#fff4f7;color:#b81f55;border-radius:999px;padding:2px 8px;font-size:.78em;font-weight:700;cursor:pointer}
   .stopbtn:hover{background:#ffe5ee}
-  .dashboard{border-top:1px solid var(--line);background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:8px 16px;max-height:150px;overflow:auto}
-  .dash-day{min-width:0}
+  .dashboard{border-top:1px solid var(--line);background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:8px 16px 10px;max-height:170px;overflow:auto}
+  .dash-title{grid-column:1/-1;color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
+  .dash-day{min-width:0;border:1px solid rgba(38,185,120,.62);border-radius:8px;padding:7px 9px;background:rgba(38,185,120,.035);box-shadow:0 1px 0 rgba(255,255,255,.78) inset}
   .dash-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:var(--txt);font-size:11px;font-weight:800;text-transform:uppercase}
   .dash-head span{color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-weight:500;text-transform:none}
   .dash-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:5px}
   .dash-item{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--bg-2);cursor:pointer;text-align:left;box-shadow:0 1px 0 rgba(255,255,255,.85) inset}
   .dash-item:hover{border-color:var(--accent);background:#fff}
   .dash-swatch{width:9px;min-width:9px;height:9px;border-radius:3px;transform:rotate(45deg);box-shadow:0 1px 0 rgba(255,255,255,.35) inset}
-  .dash-main{min-width:0;flex:1;display:flex;align-items:baseline;gap:6px}
-  .dash-run{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%}
-  .dash-step{color:var(--txt-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dash-main{min-width:0;flex:1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 7px;align-items:baseline}
+  .dash-run{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dash-start{color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px;white-space:nowrap}
+  .dash-step{grid-column:1/-1;color:var(--txt-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dash-kind{margin-left:auto;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px;white-space:nowrap}
   .dash-empty{color:var(--txt-faint);font-size:12px;padding:5px 0}
   @media (max-width:780px){
@@ -646,7 +649,8 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
     const cls="bar summary"+(openCurrent?" open-ended":"")+(stopped?" stopped":"");
     const suffix=openCurrent?" (open run)":(stopped?" (stopped)":"");
-    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(openCurrent?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span><span class="cap r" style="background:'+run.color+'"></span></div>';
+    const rightCap=openCurrent?"":'<span class="cap r" style="background:'+run.color+'"></span>';
+    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(openCurrent?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span>'+rightCap+'</div>';
   }
   h+='</div></div>';
   if(!run.collapsed)run.steps.forEach(s=>{h+=renderStepRow(run,s,trackW,bg,labelMinPx,N);});
@@ -678,14 +682,19 @@ function dashboardStepKind(s){
   if(isMs(s))return "step";
   return Math.max(Number(s.dur)||1,1)+" d";
 }
+function runStartIso(run){
+  if(!run||!run.steps.length)return "";
+  return run.steps.reduce((earliest,s)=>!earliest||isoDay(s.start)<isoDay(earliest)?s.start:earliest,"");
+}
 function dashboardItemsForDate(iso){
   const out=[];
   runs.forEach(run=>{
     const stopped=runStoppedAt(run);
+    const startIso=runStartIso(run);
     run.steps.forEach(s=>{
       if(s.start!==iso)return;
       if(stopped&&isoDay(s.start)>isoDay(stopped))return;
-      out.push({run,s});
+      out.push({run,s,startIso});
     });
   });
   return out.sort((a,b)=>(a.run.order-b.run.order)||a.run.name.localeCompare(b.run.name)||a.s.name.localeCompare(b.s.name));
@@ -694,11 +703,12 @@ function renderDashboard(){
   if(!dashboard)return;
   const today=isoToday();
   const days=[{label:"Today",iso:today},{label:"Tomorrow",iso:addIsoDays(today,1)}];
-  dashboard.innerHTML=days.map(day=>{
+  dashboard.innerHTML='<div class="dash-title">NEXT STEPS</div>'+days.map(day=>{
     const items=dashboardItemsForDate(day.iso);
     const body=items.length?'<div class="dash-list">'+items.map(item=>{
-      const title=esc(item.run.name+" • "+item.s.name+" • "+fmtIso(item.s.start));
-      return '<button class="dash-item" type="button" data-date="'+esc(day.iso)+'" data-run="'+item.run.id+'" data-step="'+item.s.id+'" title="'+title+'"><span class="dash-swatch" style="background:'+item.run.color+'"></span><span class="dash-main"><span class="dash-run">'+esc(item.run.name)+'</span><span class="dash-step">'+esc(item.s.name)+'</span></span><span class="dash-kind">'+dashboardStepKind(item.s)+'</span></button>';
+      const startTxt=item.startIso?("started "+fmtIso(item.startIso)):"start unknown";
+      const title=esc(item.run.name+" • "+startTxt+" • "+item.s.name+" • "+fmtIso(item.s.start));
+      return '<button class="dash-item" type="button" data-date="'+esc(day.iso)+'" data-run="'+item.run.id+'" data-step="'+item.s.id+'" title="'+title+'"><span class="dash-swatch" style="background:'+item.run.color+'"></span><span class="dash-main"><span class="dash-run">'+esc(item.run.name)+'</span><span class="dash-start">'+esc(startTxt)+'</span><span class="dash-step">'+esc(item.s.name)+'</span></span><span class="dash-kind">'+dashboardStepKind(item.s)+'</span></button>';
     }).join("")+'</div>':'<div class="dash-empty">No scheduled steps.</div>';
     return '<section class="dash-day"><div class="dash-head">'+day.label+' <span>'+fmtIso(day.iso)+'</span></div>'+body+'</section>';
   }).join("");
