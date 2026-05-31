@@ -27,7 +27,8 @@
     --good:#26b978;
     --weekend:rgba(65,105,232,0.045);
     --today:#f23572;
-    --label-w:calc(248px * var(--scale));
+    --label-base-w:248px;
+    --label-w:calc(var(--label-base-w) * var(--scale));
     --row-h:calc(24px * var(--scale));
     --head-h:calc(54px * var(--scale));
     --bar-h:calc(15px * var(--scale));
@@ -36,6 +37,8 @@
   html,body{margin:0;height:100%}
   body{background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;letter-spacing:0}
   body.dragging{user-select:none;cursor:grabbing}
+  body.resizing-labels{user-select:none;cursor:col-resize}
+  body.resizing-labels *{cursor:col-resize !important}
 
   /* edit-mode / read-mode visibility helpers */
   body:not(.edit-mode) .edit-only{display:none !important}
@@ -96,6 +99,8 @@
 
   .header-row{position:sticky;top:0;z-index:30;display:flex;height:var(--head-h)}
   .corner{position:sticky;left:0;z-index:41;width:var(--label-w);min-width:var(--label-w);background:var(--panel);border-right:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong);display:flex;align-items:flex-end;gap:7px;padding:0 10px 6px;font-size:.78em;color:var(--txt-faint);text-transform:uppercase;letter-spacing:0;font-weight:700;box-shadow:1px 0 0 rgba(255,255,255,.7) inset}
+  .corner::after,.row .label::after{content:"";position:absolute;top:0;right:-4px;bottom:0;width:8px;z-index:60;cursor:col-resize;touch-action:none}
+  .corner:hover::after,.row .label:hover::after,body.resizing-labels .corner::after,body.resizing-labels .row .label::after{background:linear-gradient(90deg,transparent 0 3px,rgba(65,105,232,.28) 3px 5px,transparent 5px)}
   .corner-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .corner-toggle{width:22px;height:22px;min-width:22px;padding:0;border:1px solid var(--line-strong);border-radius:6px;background:linear-gradient(180deg,#fff,var(--panel-2));color:var(--txt-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 2px 6px rgba(54,70,101,.08)}
   .corner-toggle:hover{border-color:var(--accent);color:var(--accent)}
@@ -308,6 +313,23 @@ let sessionId=sessionStorage.getItem("cct_session");
 if(!sessionId){sessionId="sess_"+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,10);sessionStorage.setItem("cct_session",sessionId);}
 try{localStorage.removeItem("cct_label");}catch(e){}
 
+// ---------- resizable run/step label column ----------
+const LABEL_WIDTH_KEY="cct_label_base_w";
+const LABEL_BASE_MIN=176,LABEL_BASE_MAX=720;
+let labelBaseW=248;
+function currentScale(){
+  return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--scale"))||1;
+}
+function setLabelBaseWidth(base,persist){
+  labelBaseW=clamp(Number(base)||248,LABEL_BASE_MIN,LABEL_BASE_MAX);
+  document.documentElement.style.setProperty("--label-base-w",labelBaseW+"px");
+  if(persist)try{localStorage.setItem(LABEL_WIDTH_KEY,String(Math.round(labelBaseW)));}catch(e){}
+}
+try{
+  const stored=Number(localStorage.getItem(LABEL_WIDTH_KEY));
+  if(Number.isFinite(stored))setLabelBaseWidth(stored,false);
+}catch(e){}
+
 // ---------- state ----------
 let runsRaw=[], stepsRaw=[];
 let runs=[];
@@ -500,7 +522,8 @@ function labelWidthPx(){
   const c=document.querySelector(".corner");
   if(c)return c.getBoundingClientRect().width;
   const scale=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--scale"))||1;
-  return 248*scale;
+  const base=parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--label-base-w"))||248;
+  return base*scale;
 }
 function currentViewRange(){
   const N=daysInYear(),sc=document.getElementById("scroll"),lw=labelWidthPx();
@@ -608,6 +631,45 @@ function render(){
   shownRuns.forEach(run=>{h+=renderRunRow(run,trackW,bg,labelMinPx,N);});
   grid.innerHTML=h+'</div>';
   if(listMode==="ongoing")lastViewKey=viewKey();
+}
+
+let labelResize=null;
+function labelResizeTarget(e){
+  const node=e.target.closest(".corner,.row .label");
+  if(!node)return null;
+  const rect=node.getBoundingClientRect();
+  return e.clientX>=rect.right-8&&e.clientX<=rect.right+4?node:null;
+}
+grid.addEventListener("pointerdown",e=>{
+  const node=labelResizeTarget(e);
+  if(!node)return;
+  e.preventDefault();e.stopImmediatePropagation();
+  labelResize={
+    node,
+    pointerId:e.pointerId,
+    startX:e.clientX,
+    startBase:labelWidthPx()/currentScale()
+  };
+  document.body.classList.add("resizing-labels");
+  try{node.setPointerCapture(e.pointerId);}catch(err){}
+  window.addEventListener("pointermove",onLabelResizeMove);
+  window.addEventListener("pointerup",onLabelResizeEnd);
+  window.addEventListener("pointercancel",onLabelResizeEnd);
+});
+function onLabelResizeMove(e){
+  if(!labelResize)return;
+  setLabelBaseWidth(labelResize.startBase+(e.clientX-labelResize.startX)/currentScale(),false);
+}
+function onLabelResizeEnd(){
+  if(!labelResize)return;
+  try{labelResize.node.releasePointerCapture(labelResize.pointerId);}catch(err){}
+  labelResize=null;
+  document.body.classList.remove("resizing-labels");
+  window.removeEventListener("pointermove",onLabelResizeMove);
+  window.removeEventListener("pointerup",onLabelResizeEnd);
+  window.removeEventListener("pointercancel",onLabelResizeEnd);
+  setLabelBaseWidth(labelBaseW,true);
+  if(listMode==="ongoing")render();
 }
 
 // ---------- click handler (collapse always works; edit actions gated) ----------
@@ -906,7 +968,7 @@ document.getElementById("zoomOut").onclick=()=>setZoom(dayW-4);
 function centerToday(){
   const t=isoToday();
   const sc=document.getElementById("scroll");
-  requestAnimationFrame(()=>{sc.scrollLeft=dayIndex(t)*dayW-sc.clientWidth/2+132;});
+  requestAnimationFrame(()=>{sc.scrollLeft=dayIndex(t)*dayW+dayW/2-(sc.clientWidth-labelWidthPx())/2;});
 }
 function jumpToToday(){
   const t=isoToday(),todayYear=Number(t.slice(0,4));
@@ -1007,6 +1069,7 @@ document.getElementById("helpBtn").onclick=()=>{
     </ul>
     <h2>Timeline</h2>
     <ul>
+      <li>Drag the divider between <code>Run / Step</code> and the calendar to resize the label column.</li>
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
       <li><code>Jump to today</code> switches to the current year and centres today.</li>
