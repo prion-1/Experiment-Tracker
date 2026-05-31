@@ -124,6 +124,9 @@
   .row .label{position:sticky;left:0;z-index:20;width:var(--label-w);min-width:var(--label-w);background:var(--panel);border-right:1px solid var(--line-strong);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:0 10px}
   .row.group .label{background:var(--panel-2)}
   .row .track{position:relative;border-bottom:1px solid var(--line)}
+  .row.highlighted .label{background:#fff8dd;box-shadow:inset 3px 0 0 var(--warn)}
+  .row.highlighted.group .label{background:#fff2c6}
+  .row.highlighted .track::before{content:"";position:absolute;inset:0;background:rgba(240,173,55,.18);border-top:1px solid rgba(240,173,55,.45);border-bottom:1px solid rgba(240,173,55,.45);pointer-events:none;z-index:1}
   .twirl{width:1.23em;min-width:1.23em;height:1.23em;border:none;background:transparent;color:var(--txt-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:4px}
   .twirl:hover{background:var(--line);color:var(--txt)}
   .twirl svg{width:.7em;height:.7em;transition:transform .15s}
@@ -154,8 +157,11 @@
   .handle{position:absolute;top:0;bottom:0;width:.45em;cursor:ew-resize;z-index:13}
   .handle.l{left:-1px;border-radius:5px 0 0 5px}.handle.r{right:-1px;border-radius:0 5px 5px 0}
   .handle:hover{background:rgba(255,255,255,.4)}
-  .bar.summary{height:calc(9px * var(--scale));border-radius:4px;padding:0;cursor:grab;opacity:.95;box-shadow:0 2px 6px rgba(69,82,110,.16)}
-  .bar.summary .cap{position:absolute;width:3px;top:-3px;bottom:-3px;border-radius:2px}
+  .bar.summary{height:calc(9px * var(--scale));border-radius:0;padding:0;cursor:grab;opacity:.95;box-shadow:0 2px 6px rgba(69,82,110,.16)}
+  .bar.summary.open-ended{border:none}
+  .bar.summary.open-ended:not(.stopped){border-top-right-radius:0;border-bottom-right-radius:0}
+  .bar.summary.open-ended::after{left:calc(100% - 1px);top:-3px;width:12px;height:calc(100% + 6px)}
+  .bar.summary .cap{position:absolute;width:3px;top:-3px;bottom:-3px;border-radius:0}
   .bar.summary .cap.l{left:0}.bar.summary .cap.r{right:0}
   .ms{position:absolute;top:50%;width:1em;height:1em;transform:translate(-50%,-50%) rotate(45deg);border-radius:2px;cursor:grab;z-index:10;box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 2px 7px rgba(69,82,110,.22);touch-action:none}
   .ms:hover{filter:brightness(1.15);z-index:12}
@@ -377,8 +383,26 @@ let viewRenderQueued=false;
 let lastViewKey="";
 let lastEdit=null;
 let dataVersion="";
+let highlightedRows=new Set();
+
+const runRowKey=rid=>"run:"+rid;
+const stepRowKey=(rid,sid)=>"step:"+rid+":"+sid;
+
+function reconcileActiveOpenRuns(){
+  const activeRunIds=new Set(stepsRaw.filter(isOpenActive).map(s=>s.runId));
+  if(!activeRunIds.size)return false;
+  let changed=false;
+  runsRaw.forEach(r=>{
+    if(r.stoppedAt&&activeRunIds.has(r.id)){
+      r.stoppedAt="";
+      changed=true;
+    }
+  });
+  return changed;
+}
 
 function buildModel(){
+  reconcileActiveOpenRuns();
   const byRun=new Map();
   runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:r.color,order:r.order||0,stoppedAt:String(r.stoppedAt||""),collapsed:collapsed.has(r.id),steps:[]}));
   stepsRaw.forEach(s=>{const r=byRun.get(s.runId);if(r)r.steps.push({id:s.id,name:s.name,start:s.start,dur:s.dur||0,mode:s.mode||"fixed",stoppedAt:s.stoppedAt||""});});
@@ -638,9 +662,10 @@ function renderEmptyState(shownRuns){
 function renderRunRow(run,trackW,bg,labelMinPx,N){
   const span=runSpan(run);
   const stopped=runStoppedAt(run),openCurrent=runIsOpenCurrent(run);
+  const hi=highlightedRows.has(runRowKey(run.id))?" highlighted":"";
   const dot=openCurrent?'<span class="run-state-dot open" title="Run is open-ended"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
   const stopBtn=!stopped?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
-  let h='<div class="row group" data-run="'+run.id+'"><div class="label">';
+  let h='<div class="row group'+hi+'" data-run="'+run.id+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+run.id+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
   h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span>'+stopBtn+'<span class="run-spacer"></span>'+dot;
   h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+run.id+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+run.id+'" title="Edit run">⚙</button></span></div>';
@@ -659,9 +684,10 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
 
 function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   const i0=dayIndex(s.start);
+  const hi=highlightedRows.has(stepRowKey(run.id,s.id))?" highlighted":"";
   const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+run.id+'" data-step="'+s.id+'" title="Stop open-ended step">Stop</button>':"";
   const stopCls=isOpenActive(s)?" has-stop":"";
-  let h='<div class="row step" data-run="'+run.id+'" data-step="'+s.id+'"><div class="label"><span class="nm" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+run.id+'" data-step="'+s.id+'" title="Edit step">⚙</button></span></div>';
+  let h='<div class="row step'+hi+'" data-run="'+run.id+'" data-step="'+s.id+'"><div class="label"><span class="nm" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+run.id+'" data-step="'+s.id+'" title="Edit step">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(isMs(s)){
     if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+run.id+'" data-step="'+s.id+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+run.color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
@@ -768,18 +794,33 @@ function onLabelResizeEnd(){
   if(listMode==="recent")render();
 }
 
-// ---------- click handler (collapse always works; edit actions gated) ----------
+function toggleRowHighlight(row){
+  const rid=row&&row.dataset.run,sid=row&&row.dataset.step;
+  if(!rid)return;
+  const key=sid?stepRowKey(rid,sid):runRowKey(rid);
+  if(highlightedRows.has(key))highlightedRows.delete(key);
+  else highlightedRows.add(key);
+  render();
+}
+
+// ---------- click handler (collapse/highlight always work; edit actions gated) ----------
 grid.addEventListener("click",e=>{
-  const el=e.target.closest("[data-act]");if(!el)return;
-  const a=el.dataset.act,rid=el.dataset.run,sid=el.dataset.step;
-  if(a==="toggleVisible"){toggleVisibleRuns();return;}
-  if(a==="toggle"){if(collapsed.has(rid))collapsed.delete(rid);else collapsed.add(rid);buildModel();render();return;}
-  if(!editMode)return; // ignore edit actions in read-only mode
-  if(a==="addstep")openStep(rid,null);
-  else if(a==="editstep")openStep(rid,sid);
-  else if(a==="editrun")openRun(rid);
-  else if(a==="stopstep")stopOpenStep(rid,sid);
-  else if(a==="stoprun")stopRun(rid);
+  const el=e.target.closest("[data-act]");
+  if(el){
+    const a=el.dataset.act,rid=el.dataset.run,sid=el.dataset.step;
+    if(a==="toggleVisible"){toggleVisibleRuns();return;}
+    if(a==="toggle"){if(collapsed.has(rid))collapsed.delete(rid);else collapsed.add(rid);buildModel();render();return;}
+    if(!editMode)return; // ignore edit actions in read-only mode
+    if(a==="addstep")openStep(rid,null);
+    else if(a==="editstep")openStep(rid,sid);
+    else if(a==="editrun")openRun(rid);
+    else if(a==="stopstep")stopOpenStep(rid,sid);
+    else if(a==="stoprun")stopRun(rid);
+    return;
+  }
+  const label=e.target.closest(".row .label");
+  if(!label||labelResizeTarget(e))return;
+  toggleRowHighlight(label.closest(".row"));
 });
 
 dashboard.addEventListener("click",e=>{
@@ -1232,10 +1273,12 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
+      <li><code>NEXT STEPS</code> lists steps starting today and tomorrow.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
       <li>Drag the divider between <code>Run / Step</code> and the calendar to resize the label column.</li>
+      <li>Click a run or step label to highlight its calendar row; click again to clear.</li>
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
       <li><code>Jump to today</code> switches to the current year and centres today.</li>
