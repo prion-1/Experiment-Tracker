@@ -7,12 +7,18 @@
 
 const SHEET_NAME_RUNS  = 'runs';
 const SHEET_NAME_STEPS = 'steps';
-const SHEET_NAME_LOCK  = 'lock';
+const SHEET_NAME_EDIT_LOG = 'edit_log';
 const PROP_SS_ID       = 'GANTT_SHEET_ID';
+const PROP_LOCK        = 'GANTT_EDIT_LOCK';
+const PROP_SCHEMA_VERSION = 'GANTT_SCHEMA_VERSION';
+const PROP_DATA_VERSION = 'GANTT_DATA_VERSION';
+const PROP_LAST_EDIT   = 'GANTT_LAST_EDIT';
+const PROP_TIME_ZONE   = 'GANTT_TIME_ZONE';
+const SCHEMA_VERSION   = '2';
 const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version'];
 const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version'];
-const LOCK_HEADERS  = ['holder', 'label', 'acquiredAt'];
-const LOCK_TTL_MS   = 20 * 60 * 1000;  // 20 min — abandoned edit sessions expire
+const EDIT_LOG_HEADERS = ['timestamp', 'editor', 'sessionId', 'runCount', 'stepCount'];
+const LOCK_TTL_MS   = 30 * 60 * 1000;  // 30 min — abandoned edit sessions expire
 
 // ----------------------------------------------------------------------------
 // ACCESS CONTROL — edit this list to restrict who can use the app.
@@ -71,33 +77,45 @@ function doGet() {
 // ----------------------------------------------------------------------------
 function _getSpreadsheet() {
   const props = PropertiesService.getScriptProperties();
-  let id = props.getProperty(PROP_SS_ID);
+  const id = props.getProperty(PROP_SS_ID);
   if (id) {
     try {
-      const file = DriveApp.getFileById(id);
-      if (file.isTrashed()) {
-        props.deleteProperty(PROP_SS_ID);
-        id = null;
-      } else {
-        const ss = SpreadsheetApp.openById(id);
-        _ensureSchema(ss);
-        return ss;
-      }
+      const ss = SpreadsheetApp.openById(id);
+      _ensureSchemaIfNeeded(ss, props);
+      return ss;
     } catch (e) {
-      props.deleteProperty(PROP_SS_ID);
-      id = null;
+      throw new Error(
+        'Could not open the Cell Culture Tracker data sheet (' + id + '). ' +
+        'Check that it still exists and that this deployment account can access it. ' +
+        'Original error: ' + (e && e.message ? e.message : String(e))
+      );
     }
   }
+  return _createSpreadsheet(props);
+}
+
+function _createSpreadsheet(props) {
   const ss = SpreadsheetApp.create('Cell Culture Tracker — data');
   const runs = ss.getActiveSheet();
   runs.setName(SHEET_NAME_RUNS);
   runs.getRange(1, 1, 1, RUNS_HEADERS.length).setValues([RUNS_HEADERS]);
   const steps = ss.insertSheet(SHEET_NAME_STEPS);
   steps.getRange(1, 1, 1, STEPS_HEADERS.length).setValues([STEPS_HEADERS]);
-  const lock = ss.insertSheet(SHEET_NAME_LOCK);
-  lock.getRange(1, 1, 1, LOCK_HEADERS.length).setValues([LOCK_HEADERS]);
+  const editLog = ss.insertSheet(SHEET_NAME_EDIT_LOG);
+  editLog.getRange(1, 1, 1, EDIT_LOG_HEADERS.length).setValues([EDIT_LOG_HEADERS]);
   props.setProperty(PROP_SS_ID, ss.getId());
+  props.setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
+  props.setProperty(PROP_DATA_VERSION, '0');
+  props.setProperty(PROP_TIME_ZONE, ss.getSpreadsheetTimeZone());
   return ss;
+}
+
+function _ensureSchemaIfNeeded(ss, props) {
+  if (props.getProperty(PROP_SCHEMA_VERSION) === SCHEMA_VERSION) return;
+  _ensureSchema(ss);
+  props.setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
+  if (!props.getProperty(PROP_DATA_VERSION)) props.setProperty(PROP_DATA_VERSION, '0');
+  props.setProperty(PROP_TIME_ZONE, ss.getSpreadsheetTimeZone());
 }
 
 function _ensureSchema(ss) {
@@ -109,22 +127,21 @@ function _ensureSchema(ss) {
       if (cur[i] !== headers[i]) sh.getRange(1, i + 1).setValue(headers[i]);
     }
   };
-  ensureCols(ss.getSheetByName(SHEET_NAME_RUNS),  RUNS_HEADERS);
-  ensureCols(ss.getSheetByName(SHEET_NAME_STEPS), STEPS_HEADERS);
-  let lockSh = ss.getSheetByName(SHEET_NAME_LOCK);
-  if (!lockSh) {
-    lockSh = ss.insertSheet(SHEET_NAME_LOCK);
-    lockSh.getRange(1, 1, 1, LOCK_HEADERS.length).setValues([LOCK_HEADERS]);
-  } else {
-    ensureCols(lockSh, LOCK_HEADERS);
-  }
+  const ensureSheet = function (name, headers) {
+    let sh = ss.getSheetByName(name);
+    if (!sh) sh = ss.insertSheet(name);
+    ensureCols(sh, headers);
+    return sh;
+  };
+  ensureSheet(SHEET_NAME_RUNS, RUNS_HEADERS);
+  ensureSheet(SHEET_NAME_STEPS, STEPS_HEADERS);
+  ensureSheet(SHEET_NAME_EDIT_LOG, EDIT_LOG_HEADERS);
 }
 
-function _sheet(name) { return _getSpreadsheet().getSheetByName(name); }
 function _uid() { return 'id_' + Utilities.getUuid().replace(/-/g, '').slice(0, 12); }
 
-function _readAll(name) {
-  const sh = _sheet(name);
+function _readAll(ss, name) {
+  const sh = ss.getSheetByName(name);
   const last = sh.getLastRow();
   if (last < 2) return [];
   const cols = sh.getLastColumn();
@@ -137,27 +154,85 @@ function _readAll(name) {
   });
 }
 
-function _toIso(v) {
+function _toIso(v, tz) {
   if (v instanceof Date) {
-    const tz = _getSpreadsheet().getSpreadsheetTimeZone();
     return Utilities.formatDate(v, tz, 'yyyy-MM-dd');
   }
   return String(v || '');
+}
+
+function _props() {
+  return PropertiesService.getScriptProperties();
+}
+
+function _timeZone(ss) {
+  const props = _props();
+  const tz = ss ? ss.getSpreadsheetTimeZone() : (props.getProperty(PROP_TIME_ZONE) || Session.getScriptTimeZone());
+  if (ss) props.setProperty(PROP_TIME_ZONE, tz);
+  return tz;
+}
+
+function _todayIso(tz) {
+  return Utilities.formatDate(new Date(), tz || Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function _readDataVersion() {
+  return _props().getProperty(PROP_DATA_VERSION) || '0';
+}
+
+function _bumpDataVersion() {
+  const version = Date.now() + '_' + Utilities.getUuid().replace(/-/g, '').slice(0, 8);
+  _props().setProperty(PROP_DATA_VERSION, version);
+  return version;
+}
+
+function _readLastEditProperty() {
+  const raw = _props().getProperty(PROP_LAST_EDIT);
+  if (!raw) return null;
+  try {
+    const meta = JSON.parse(raw);
+    if (!meta || !meta.timestamp) return null;
+    return {
+      timestamp: Number(meta.timestamp) || 0,
+      editor: String(meta.editor || '')
+    };
+  } catch (e) {
+    _props().deleteProperty(PROP_LAST_EDIT);
+    return null;
+  }
+}
+
+function _writeLastEditProperty(meta) {
+  if (!meta || !meta.timestamp) {
+    _props().deleteProperty(PROP_LAST_EDIT);
+    return null;
+  }
+  const clean = {
+    timestamp: Number(meta.timestamp) || 0,
+    editor: String(meta.editor || '')
+  };
+  _props().setProperty(PROP_LAST_EDIT, JSON.stringify(clean));
+  return clean;
 }
 
 // ----------------------------------------------------------------------------
 // LOCK helpers
 // ----------------------------------------------------------------------------
 function _readLock() {
-  const sh = _sheet(SHEET_NAME_LOCK);
-  if (!sh || sh.getLastRow() < 2) return null;
-  const row = sh.getRange(2, 1, 1, 3).getValues()[0];
-  if (!row[0]) return null;
-  return {
-    holder: String(row[0]),
-    label:  String(row[1] || ''),
-    acquiredAt: Number(row[2]) || 0
-  };
+  const raw = PropertiesService.getScriptProperties().getProperty(PROP_LOCK);
+  if (!raw) return null;
+  try {
+    const lock = JSON.parse(raw);
+    if (!lock || !lock.holder) return null;
+    return {
+      holder: String(lock.holder),
+      label:  String(lock.label || ''),
+      acquiredAt: Number(lock.acquiredAt) || 0
+    };
+  } catch (e) {
+    _clearLock();
+    return null;
+  }
 }
 
 function _isLockExpired(lock) {
@@ -166,15 +241,113 @@ function _isLockExpired(lock) {
 }
 
 function _writeLock(holder, label) {
-  const sh = _sheet(SHEET_NAME_LOCK);
-  const values = [[holder, label, Date.now()]];
-  if (sh.getLastRow() < 2) sh.getRange(2, 1, 1, 3).setValues(values);
-  else sh.getRange(2, 1, 1, 3).setValues(values);
+  PropertiesService.getScriptProperties().setProperty(PROP_LOCK, JSON.stringify({
+    holder: String(holder || ''),
+    label: String(label || ''),
+    acquiredAt: Date.now()
+  }));
 }
 
 function _clearLock() {
-  const sh = _sheet(SHEET_NAME_LOCK);
-  if (sh.getLastRow() >= 2) sh.getRange(2, 1, 1, 3).setValues([['', '', '']]);
+  PropertiesService.getScriptProperties().deleteProperty(PROP_LOCK);
+}
+
+function _appendEditLog(ss, lock, runs, steps) {
+  const sh = ss.getSheetByName(SHEET_NAME_EDIT_LOG);
+  const when = new Date();
+  const meta = {
+    timestamp: when.getTime(),
+    editor: String((lock && lock.label) || 'Unknown editor')
+  };
+  sh.appendRow([
+    when,
+    meta.editor,
+    String((lock && lock.holder) || ''),
+    runs && runs.length ? runs.length : 0,
+    steps && steps.length ? steps.length : 0
+  ]);
+  return meta;
+}
+
+function _readLastEdit(ss) {
+  const cached = _readLastEditProperty();
+  if (cached) return cached;
+  const sh = ss.getSheetByName(SHEET_NAME_EDIT_LOG);
+  const last = sh.getLastRow();
+  if (last < 2) return null;
+  const row = sh.getRange(last, 1, 1, EDIT_LOG_HEADERS.length).getValues()[0];
+  const ts = row[0] instanceof Date ? row[0].getTime() : 0;
+  return _writeLastEditProperty({
+    timestamp: ts,
+    editor: String(row[1] || '')
+  });
+}
+
+function _normalizeRuns(runs) {
+  return (runs || []).map(function (r) {
+    return {
+      id: String(r.id || _uid()),
+      name: String(r.name || ''),
+      color: String(r.color || ''),
+      order: Number(r.order) || 0
+    };
+  });
+}
+
+function _normalizeSteps(steps, tz) {
+  return (steps || []).map(function (s) {
+    const mode = String(s.mode || '').toLowerCase() === 'open' ? 'open' : 'fixed';
+    return {
+      id: String(s.id || _uid()),
+      runId: String(s.runId || ''),
+      name: String(s.name || ''),
+      start: _toIso(s.start, tz),
+      dur: Number(s.dur) || 0,
+      mode: mode,
+      stoppedAt: mode === 'open' ? _toIso(s.stoppedAt, tz) : ''
+    };
+  });
+}
+
+function _metaPayload() {
+  const tz = _timeZone(null);
+  return {
+    lock: _activeLock(),
+    lastEdit: _readLastEditProperty(),
+    dataVersion: _readDataVersion(),
+    serverTime: Date.now(),
+    lockTtlMs: LOCK_TTL_MS,
+    todayIso: _todayIso(tz)
+  };
+}
+
+function _loadPayload(ss) {
+  const tz = _timeZone(ss);
+  const runsRaw  = _readAll(ss, SHEET_NAME_RUNS);
+  const stepsRaw = _readAll(ss, SHEET_NAME_STEPS);
+  const meta = _metaPayload();
+  meta.runs = _normalizeRuns(runsRaw).map(function (r) {
+    if (!r.color) r.color = '#44d8e0';
+    return r;
+  });
+  meta.steps = _normalizeSteps(stepsRaw, tz);
+  meta.lastEdit = _readLastEdit(ss);
+  meta.todayIso = _todayIso(tz);
+  return meta;
+}
+
+function _payloadFromNormalized(runs, steps, lock, lastEdit, dataVersion, tz) {
+  return {
+    ok: true,
+    runs: runs,
+    steps: steps,
+    lock: lock,
+    lastEdit: lastEdit,
+    dataVersion: dataVersion,
+    serverTime: Date.now(),
+    lockTtlMs: LOCK_TTL_MS,
+    todayIso: _todayIso(tz)
+  };
 }
 
 // Returns the active lock state (null if none or expired).
@@ -193,34 +366,12 @@ function _activeLock() {
 // ----------------------------------------------------------------------------
 function loadAll() {
   _checkAccess();
-  const runsRaw  = _readAll(SHEET_NAME_RUNS);
-  const stepsRaw = _readAll(SHEET_NAME_STEPS);
-  const lock = _activeLock();
-  return {
-    runs: runsRaw.map(function (r) {
-      return {
-        id: String(r.id),
-        name: String(r.name || ''),
-        color: String(r.color || '#44d8e0'),
-        order: Number(r.order) || 0
-      };
-    }),
-    steps: stepsRaw.map(function (s) {
-      const mode = String(s.mode || '').toLowerCase() === 'open' ? 'open' : 'fixed';
-      return {
-        id: String(s.id),
-        runId: String(s.runId),
-        name: String(s.name || ''),
-        start: _toIso(s.start),
-        dur: Number(s.dur) || 0,
-        mode: mode,
-        stoppedAt: mode === 'open' ? _toIso(s.stoppedAt) : ''
-      };
-    }),
-    lock: lock,
-    serverTime: Date.now(),
-    lockTtlMs: LOCK_TTL_MS
-  };
+  return _loadPayload(_getSpreadsheet());
+}
+
+function loadMeta() {
+  _checkAccess();
+  return _metaPayload();
 }
 
 // ----------------------------------------------------------------------------
@@ -234,10 +385,17 @@ function acquireLock(sessionId, label) {
   try {
     const cur = _readLock();
     if (cur && cur.holder && !_isLockExpired(cur) && cur.holder !== sessionId) {
-      return {ok: false, reason: 'held', lock: cur};
+      const meta = _metaPayload();
+      meta.ok = false;
+      meta.reason = 'held';
+      meta.lock = cur;
+      return meta;
     }
     _writeLock(sessionId, String(label || ''));
-    return {ok: true, lock: _readLock(), lockTtlMs: LOCK_TTL_MS};
+    const meta = _metaPayload();
+    meta.ok = true;
+    meta.lock = _readLock();
+    return meta;
   } finally {
     scriptLock.releaseLock();
   }
@@ -251,7 +409,9 @@ function releaseLock(sessionId) {
   try {
     const cur = _readLock();
     if (cur && cur.holder === sessionId) _clearLock();
-    return {ok: true};
+    const meta = _metaPayload();
+    meta.ok = true;
+    return meta;
   } finally {
     scriptLock.releaseLock();
   }
@@ -276,44 +436,31 @@ function saveAll(sessionId, runs, steps) {
       };
     }
     const ss = _getSpreadsheet();
+    const tz = _timeZone(ss);
     const rSh = ss.getSheetByName(SHEET_NAME_RUNS);
     const sSh = ss.getSheetByName(SHEET_NAME_STEPS);
+    const normalizedRuns = _normalizeRuns(runs);
+    const normalizedSteps = _normalizeSteps(steps, tz);
+    const runRows = normalizedRuns.map(function (r) {
+      return [r.id, r.name, r.color, r.order, ''];
+    });
+    const stepRows = normalizedSteps.map(function (s) {
+      return [s.id, s.runId, s.name, s.start, s.dur, s.mode, s.stoppedAt, ''];
+    });
 
     // Clear existing data rows (keep headers)
     if (rSh.getLastRow() > 1) rSh.getRange(2, 1, rSh.getLastRow() - 1, rSh.getLastColumn()).clearContent();
     if (sSh.getLastRow() > 1) sSh.getRange(2, 1, sSh.getLastRow() - 1, sSh.getLastColumn()).clearContent();
 
     // Write fresh data.
-    if (runs && runs.length) {
-      const rows = runs.map(function (r) {
-        return [
-          String(r.id || _uid()),
-          String(r.name || ''),
-          String(r.color || ''),
-          Number(r.order) || 0,
-          ''
-        ];
-      });
-      rSh.getRange(2, 1, rows.length, 5).setValues(rows);
-    }
-    if (steps && steps.length) {
-      const rows = steps.map(function (s) {
-        const mode = String(s.mode || '').toLowerCase() === 'open' ? 'open' : 'fixed';
-        return [
-          String(s.id || _uid()),
-          String(s.runId || ''),
-          String(s.name || ''),
-          _toIso(s.start),
-          Number(s.dur) || 0,
-          mode,
-          mode === 'open' ? _toIso(s.stoppedAt) : '',
-          ''
-        ];
-      });
-      sSh.getRange(2, 1, rows.length, 8).setValues(rows);
-    }
+    if (runRows.length) rSh.getRange(2, 1, runRows.length, RUNS_HEADERS.length).setValues(runRows);
+    if (stepRows.length) sSh.getRange(2, 1, stepRows.length, STEPS_HEADERS.length).setValues(stepRows);
+    const lastEdit = _appendEditLog(ss, cur, normalizedRuns, normalizedSteps);
+    SpreadsheetApp.flush();
+    _writeLastEditProperty(lastEdit);
+    const dataVersion = _bumpDataVersion();
     _clearLock();
-    return {ok: true};
+    return _payloadFromNormalized(normalizedRuns, normalizedSteps, null, lastEdit, dataVersion, tz);
   } finally {
     scriptLock.releaseLock();
   }
@@ -330,6 +477,8 @@ function _resetForDev_() {
     if (last > 1) sh.deleteRows(2, last - 1);
   });
   _clearLock();
+  _props().deleteProperty(PROP_LAST_EDIT);
+  _bumpDataVersion();
 }
 
 function _forceClearLock_() {
@@ -342,6 +491,20 @@ function _logDataSheetUrl_() {
   Logger.log('Data sheet url: ' + ss.getUrl());
 }
 
+function _forceSchemaMigration_() {
+  const ss = SpreadsheetApp.openById(_props().getProperty(PROP_SS_ID));
+  _ensureSchema(ss);
+  _props().setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
+}
+
 function _unlinkDataSheetForDev_() {
-  PropertiesService.getScriptProperties().deleteProperty(PROP_SS_ID);
+  const props = _props();
+  [
+    PROP_SS_ID,
+    PROP_SCHEMA_VERSION,
+    PROP_DATA_VERSION,
+    PROP_LAST_EDIT,
+    PROP_TIME_ZONE
+  ].forEach(function (key) { props.deleteProperty(key); });
+  _clearLock();
 }
