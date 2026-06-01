@@ -41,6 +41,8 @@
   body.resizing-labels *{cursor:col-resize !important}
   body.resizing-dashboard{user-select:none;cursor:row-resize}
   body.resizing-dashboard *{cursor:row-resize !important}
+  body.resizing-template-editor{user-select:none;cursor:col-resize}
+  body.resizing-template-editor *{cursor:col-resize !important}
 
   /* edit-mode / read-mode visibility helpers */
   body:not(.edit-mode) .edit-only{display:none !important}
@@ -178,6 +180,8 @@
   .modal.wide{width:min(980px,94vw);max-height:88vh;overflow:auto}
   .modal.template-maker-window{resize:both;display:flex;flex-direction:column;height:min(620px,88vh);min-width:min(680px,94vw);min-height:380px;max-width:96vw;max-height:92vh}
   .modal h3{margin:0 0 16px;font-size:15px;font-weight:700;letter-spacing:0}
+  .template-title-panel{align-self:stretch;margin:-6px 0 14px;padding:8px 13px;background:#fff3df;border:1px solid #ead4ad;border-radius:8px;box-shadow:0 10px 22px rgba(54,70,101,.12),0 1px 0 rgba(255,255,255,.92) inset;text-align:left}
+  .template-title-panel h3{margin:0}
   .modal h4{margin:0 0 10px;font-size:12px;font-weight:800;color:var(--txt);text-transform:uppercase}
   .modal-meta{margin:-8px 0 14px;color:var(--txt-faint);font-size:11px;font-family:"JetBrains Mono",monospace;line-height:1.35}
   .modal p{margin:0 0 12px;color:var(--txt-dim);font-size:12.5px;line-height:1.5}
@@ -197,9 +201,12 @@
   .btn.danger:hover:not(:disabled){background:#ffe7ef}
   .template-fields{display:grid;grid-template-columns:minmax(260px,1fr) 92px 74px;gap:10px;align-items:end}
   .template-fields input[type=color]{height:30px;padding:2px}
-  .template-editor{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:14px;margin-top:8px}
+  .template-editor{display:grid;grid-template-columns:var(--template-left-w,340px) 8px minmax(0,1fr);gap:7px;margin-top:8px}
   .template-maker-window .template-editor{flex:1;min-height:0}
-  .template-maker-window .template-editor>div{display:flex;flex-direction:column;min-height:0}
+  .template-editor-pane{display:flex;flex-direction:column;min-height:0}
+  .template-editor-resizer{position:relative;cursor:col-resize;border-radius:999px}
+  .template-editor-resizer::before{content:"";position:absolute;top:36px;bottom:8px;left:50%;width:3px;transform:translateX(-50%);border-left:1px solid var(--line-strong);border-right:1px solid rgba(255,255,255,.85);border-radius:999px}
+  .template-editor-resizer:hover::before,body.resizing-template-editor .template-editor-resizer::before{border-left-color:var(--accent)}
   .template-step-list{display:flex;flex-direction:column;gap:7px;max-height:320px;overflow:auto;padding:7px;border:1px solid rgba(38,185,120,.72);border-radius:8px;background:rgba(38,185,120,.028);box-shadow:0 0 0 2px rgba(38,185,120,.08)}
   .template-maker-window .template-step-list,.template-maker-window .template-preview-scroll{flex:1;min-height:150px;max-height:none}
   .template-step-list.unsorted{border-color:rgba(242,53,114,.72);background:rgba(242,53,114,.026);box-shadow:0 0 0 2px rgba(242,53,114,.08)}
@@ -219,9 +226,10 @@
   .template-day{width:28px;min-width:28px;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);font-family:"JetBrains Mono",monospace;color:var(--txt-dim);font-size:10px}
   .template-row{height:28px;position:relative;border-bottom:1px solid var(--line)}
   .template-row-label{position:sticky;left:0;z-index:1;width:120px;height:100%;display:flex;align-items:center;padding:0 8px;background:var(--panel);border-right:1px solid var(--line);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .template-axis-label{background:#fff6df;color:var(--txt);border-right-color:#eadfbd;box-shadow:0 1px 0 rgba(255,255,255,.86) inset}
   .template-row-track{position:absolute;left:120px;top:0;height:100%;background-image:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 28px)}
   .template-bar{position:absolute;top:50%;transform:translateY(-50%);height:14px;border-radius:0;background:var(--accent);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18);cursor:grab;touch-action:none}
-  .template-run-bar{cursor:ew-resize}
+  .template-run-bar{cursor:ew-resize;border:1px solid transparent;border-radius:999px}
   .template-ms{position:absolute;top:50%;width:12px;height:12px;transform:translate(-50%,-50%) rotate(45deg);border-radius:2px;background:var(--accent);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18);cursor:grab;touch-action:none}
   .template-handle{position:absolute;top:-2px;bottom:-2px;width:8px;cursor:ew-resize;z-index:2}
   .template-handle.l{left:-2px}.template-handle.r{right:-2px}
@@ -239,6 +247,7 @@
   .template-param .dur{text-align:right;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px}
   @media (max-width:780px){
     .template-fields,.template-editor,.template-selector{grid-template-columns:1fr}
+    .template-editor-resizer{display:none}
     .template-step-head,.template-step-row{grid-template-columns:minmax(90px,1fr) 54px 58px 68px 26px}
   }
 
@@ -263,7 +272,7 @@
   .dashboard-resizer{height:7px;flex:0 0 7px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);cursor:row-resize;position:relative}
   .dashboard-resizer::before{content:"";position:absolute;left:50%;top:50%;width:42px;height:3px;border-top:1px solid var(--line-strong);border-bottom:1px solid rgba(255,255,255,.9);transform:translate(-50%,-50%);border-radius:999px}
   .dashboard-resizer:hover::before,body.resizing-dashboard .dashboard-resizer::before{border-top-color:var(--accent)}
-  .dashboard{background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:max-content minmax(0,1fr);align-items:stretch;gap:8px 12px;padding:8px 16px 10px;height:25vh;max-height:none;min-height:72px;overflow:auto;flex:0 0 auto}
+  .dashboard{background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:max-content minmax(0,1fr);align-items:stretch;gap:8px 12px;padding:8px 16px 10px;height:25vh;max-height:none;min-height:var(--dashboard-min-h,72px);overflow:auto;flex:0 0 auto}
   .dashboard.sized{height:var(--dashboard-h);max-height:none}
   .dash-title{grid-column:1/-1;align-self:start;color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
   .dash-day{min-width:0;min-height:0;overflow:auto;border:1px solid rgba(38,185,120,.62);border-radius:8px;padding:7px 9px;background:rgba(38,185,120,.035);box-shadow:0 1px 0 rgba(255,255,255,.78) inset}
@@ -309,7 +318,7 @@
 
       <!-- edit mode -->
       <button class="btn edit-only" id="addRunBtn">+ Add run</button>
-      <button class="btn edit-only" id="templateMakerBtn">Template maker</button>
+      <button class="btn edit-only" id="templateMakerBtn">Template Maker</button>
       <button class="btn edit-only" id="importBtn">Import JSON</button>
       <input type="file" id="importInput" accept="application/json,.json" style="display:none">
       <button class="btn edit-only" id="cancelBtn">Cancel</button>
@@ -350,19 +359,20 @@
 
 <!-- template maker modal -->
 <div class="modal-bg" id="templateMakerModal"><div class="modal wide template-maker-window">
-  <h3>Template maker</h3>
+  <div class="template-title-panel"><h3>Template maker</h3></div>
   <div class="template-fields">
     <div class="field"><label>Template name</label><input type="text" id="tmplName" placeholder="e.g. iNGN2 standard diff"></div>
     <div class="field"><label>Run length</label><input type="number" id="tmplRunLength" min="1" value="14"></div>
     <div class="field"><label>Colour</label><input type="color" id="tmplColor" value="#4169e8"></div>
   </div>
-  <div class="template-editor">
-    <div>
+  <div class="template-editor" id="tmplEditor">
+    <div class="template-editor-pane">
       <h4>Steps</h4>
-      <div class="template-side-actions"><button class="btn" type="button" id="tmplAddStep">+ Add step</button><button class="btn template-sort-btn sorted" type="button" id="tmplSortSteps" disabled>sorted</button></div>
+      <div class="template-side-actions"><button class="btn" type="button" id="tmplAddStep">+ Add step</button><button class="btn template-sort-btn sorted" type="button" id="tmplSortSteps" disabled>Sorted</button></div>
       <div class="template-step-list" id="tmplStepList"></div>
     </div>
-    <div>
+    <div class="template-editor-resizer" id="tmplEditorResizer" title="Resize step list" aria-hidden="true"></div>
+    <div class="template-editor-pane">
       <h4>Preview</h4>
       <div class="template-preview-scroll"><div class="template-preview" id="tmplPreview"></div></div>
     </div>
@@ -899,6 +909,7 @@ function renderDashboard(){
     }).join("")+'</div>':'<div class="dash-empty">No scheduled steps.</div>';
     return '<section class="dash-day"><div class="dash-head">'+day.label+' <span>'+fmtIso(day.iso)+'</span></div>'+body+'</section>';
   }).join("");
+  syncDashboardMinHeight();
 }
 
 function render(){
@@ -917,18 +928,61 @@ function render(){
 }
 
 const DASHBOARD_HEIGHT_KEY="cct_dashboard_h";
-const DASHBOARD_MIN_H=72,DASHBOARD_CALENDAR_MIN_H=150;
+const DASHBOARD_BASE_MIN_H=72,DASHBOARD_CALENDAR_MIN_H=150;
 let dashboardResize=null;
+function cssPx(v){
+  const n=parseFloat(v);
+  return Number.isFinite(n)?n:0;
+}
+function boxHeight(el,includeMargins){
+  if(!el)return 0;
+  const cs=getComputedStyle(el);
+  const margins=includeMargins?cssPx(cs.marginTop)+cssPx(cs.marginBottom):0;
+  return el.getBoundingClientRect().height+margins;
+}
+function dashboardSectionMinHeight(section){
+  const item=section&&section.querySelector(".dash-item");
+  if(!item)return 0;
+  const head=section.querySelector(".dash-head");
+  const cs=getComputedStyle(section);
+  return cssPx(cs.paddingTop)+cssPx(cs.paddingBottom)+cssPx(cs.borderTopWidth)+cssPx(cs.borderBottomWidth)+boxHeight(head,true)+boxHeight(item,false);
+}
+function measuredDashboardMinHeight(){
+  if(!dashboard||!dashboard.querySelector(".dash-item"))return DASHBOARD_BASE_MIN_H;
+  const cs=getComputedStyle(dashboard);
+  const sections=[...dashboard.querySelectorAll(".dash-day")];
+  const sectionMin=sections.reduce((m,section)=>Math.max(m,dashboardSectionMinHeight(section)),0);
+  if(!sectionMin)return DASHBOARD_BASE_MIN_H;
+  const stacked=window.matchMedia("(max-width:780px)").matches;
+  const sectionRows=stacked?sections.length:1;
+  const rowGaps=stacked?sections.length:1;
+  const verticalChrome=cssPx(cs.paddingTop)+cssPx(cs.paddingBottom)+boxHeight(dashboard.querySelector(".dash-title"),true);
+  return Math.ceil(Math.max(DASHBOARD_BASE_MIN_H,verticalChrome+cssPx(cs.rowGap)*rowGaps+sectionMin*sectionRows+2));
+}
+function dashboardMinHeight(){
+  if(!dashboard)return DASHBOARD_BASE_MIN_H;
+  return Math.max(DASHBOARD_BASE_MIN_H,cssPx(dashboard.style.getPropertyValue("--dashboard-min-h")));
+}
+function syncDashboardMinHeight(){
+  if(!dashboard)return;
+  const minH=measuredDashboardMinHeight();
+  dashboard.style.setProperty("--dashboard-min-h",minH+"px");
+  if(dashboard.classList.contains("sized")&&dashboard.getBoundingClientRect().height<minH){
+    setDashboardHeight(minH,false);
+  }
+}
 function maxDashboardHeight(){
   const sc=document.getElementById("scroll");
   const currentDash=dashboard?dashboard.getBoundingClientRect().height:0;
   const available=(sc?sc.clientHeight:0)+currentDash;
-  if(available>0)return Math.max(DASHBOARD_MIN_H,available-DASHBOARD_CALENDAR_MIN_H);
-  return Math.max(DASHBOARD_MIN_H,Math.floor(window.innerHeight*.55));
+  const minH=dashboardMinHeight();
+  if(available>0)return Math.max(minH,available-DASHBOARD_CALENDAR_MIN_H);
+  return Math.max(minH,Math.floor(window.innerHeight*.55));
 }
-function setDashboardHeight(px,persist){
+function setDashboardHeight(height,persist){
   if(!dashboard)return;
-  const h=clamp(Math.round(Number(px)||DASHBOARD_MIN_H),DASHBOARD_MIN_H,maxDashboardHeight());
+  const minH=dashboardMinHeight();
+  const h=clamp(Math.round(Number(height)||minH),minH,maxDashboardHeight());
   dashboard.classList.add("sized");
   dashboard.style.setProperty("--dashboard-h",h+"px");
   if(persist)try{localStorage.setItem(DASHBOARD_HEIGHT_KEY,String(h));}catch(e){}
@@ -1207,9 +1261,54 @@ document.getElementById("runDelete").onclick=()=>{
 // ---------- templates ----------
 const templateMakerModal=document.getElementById("templateMakerModal");
 const templateSelectModal=document.getElementById("templateSelectModal");
+const templateEditor=document.getElementById("tmplEditor");
+const templateEditorResizer=document.getElementById("tmplEditorResizer");
+const TEMPLATE_EDITOR_WIDTH_KEY="cct_template_left_w";
+const TEMPLATE_EDITOR_MIN_W=260,TEMPLATE_EDITOR_PREVIEW_MIN_W=280,TEMPLATE_RUN_CREAM="#fff6df";
+let templateLeftW=340,templateEditorResize=null;
 function templateStepEnd(s){return Math.max(1,Number(s.startDay)||1)+Math.max(Number(s.dur)||1,1)-1;}
 function templateStepStartDay(s){
   return Math.max(1,Number(s&&s.startDay)||1);
+}
+function templateEditorMaxLeftWidth(){
+  const w=templateEditor?templateEditor.getBoundingClientRect().width:0;
+  return w>0?Math.max(TEMPLATE_EDITOR_MIN_W,w-TEMPLATE_EDITOR_PREVIEW_MIN_W-8):720;
+}
+function setTemplateLeftWidth(px,persist){
+  templateLeftW=clamp(Number(px)||340,TEMPLATE_EDITOR_MIN_W,templateEditorMaxLeftWidth());
+  document.documentElement.style.setProperty("--template-left-w",templateLeftW+"px");
+  if(persist)try{localStorage.setItem(TEMPLATE_EDITOR_WIDTH_KEY,String(Math.round(templateLeftW)));}catch(e){}
+}
+try{
+  const stored=Number(localStorage.getItem(TEMPLATE_EDITOR_WIDTH_KEY));
+  if(Number.isFinite(stored))setTemplateLeftWidth(stored,false);
+  else setTemplateLeftWidth(templateLeftW,false);
+}catch(e){setTemplateLeftWidth(templateLeftW,false);}
+function onTemplateEditorResizeMove(e){
+  if(!templateEditorResize)return;
+  setTemplateLeftWidth(templateEditorResize.startW+(e.clientX-templateEditorResize.startX),false);
+}
+function onTemplateEditorResizeEnd(){
+  if(!templateEditorResize)return;
+  try{templateEditorResizer.releasePointerCapture(templateEditorResize.pointerId);}catch(err){}
+  templateEditorResize=null;
+  document.body.classList.remove("resizing-template-editor");
+  window.removeEventListener("pointermove",onTemplateEditorResizeMove);
+  window.removeEventListener("pointerup",onTemplateEditorResizeEnd);
+  window.removeEventListener("pointercancel",onTemplateEditorResizeEnd);
+  setTemplateLeftWidth(templateLeftW,true);
+}
+templateEditorResizer.addEventListener("pointerdown",e=>{
+  e.preventDefault();e.stopImmediatePropagation();
+  templateEditorResize={pointerId:e.pointerId,startX:e.clientX,startW:templateLeftW};
+  document.body.classList.add("resizing-template-editor");
+  try{templateEditorResizer.setPointerCapture(e.pointerId);}catch(err){}
+  window.addEventListener("pointermove",onTemplateEditorResizeMove);
+  window.addEventListener("pointerup",onTemplateEditorResizeEnd);
+  window.addEventListener("pointercancel",onTemplateEditorResizeEnd);
+});
+if(window.ResizeObserver&&templateEditor){
+  new ResizeObserver(()=>setTemplateLeftWidth(templateLeftW,false)).observe(templateEditor);
 }
 function templateCellCenter(day){
   return (Math.max(1,Number(day)||1)-0.5)*TEMPLATE_DAY_W;
@@ -1221,6 +1320,14 @@ function templateBarGeom(startDay,days){
   const width=templateCellCenter(start+dur-1)-left;
   if(width<=0)return {left:left-TEMPLATE_MIN_BAR_W/2,width:TEMPLATE_MIN_BAR_W};
   return {left:left,width};
+}
+function templateRunBackground(color){
+  const c=String(color||PALETTE[0]);
+  return "repeating-linear-gradient(135deg,"+c+" 0 8px,"+TEMPLATE_RUN_CREAM+" 8px 16px)";
+}
+function templateRunBarStyle(color,geom){
+  const c=String(color||PALETTE[0]);
+  return "left:"+geom.left+"px;width:"+geom.width+"px;background:"+templateRunBackground(c)+";border-color:"+c+";box-shadow:0 0 0 1px "+c+",0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18)";
 }
 function templateStepHeadHtml(){
   return '<div class="template-step-head"><span>Name</span><span>Start</span><span>Duration</span><span>Milestone</span><span></span></div>';
@@ -1246,7 +1353,7 @@ function syncTemplateSortState(){
   const sorted=templateOrderIsSorted();
   list.classList.toggle("unsorted",!sorted);
   btn.disabled=sorted;
-  btn.textContent=sorted?"sorted":"sort";
+  btn.textContent=sorted?"Sorted":"Sort";
   btn.classList.toggle("sorted",sorted);
   btn.classList.toggle("unsorted",!sorted);
 }
@@ -1268,9 +1375,13 @@ function setTemplateRunLengthDays(days){
 function syncTemplateRunBar(){
   const runBar=document.querySelector("#tmplPreview .template-run-bar");
   if(runBar){
+    const color=document.getElementById("tmplColor").value||PALETTE[0];
     const geom=templateBarGeom(1,templateRunLengthValue());
     runBar.style.left=geom.left+"px";
     runBar.style.width=geom.width+"px";
+    runBar.style.background=templateRunBackground(color);
+    runBar.style.borderColor=color;
+    runBar.style.boxShadow="0 0 0 1px "+color+",0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18)";
   }
 }
 function syncTemplateStepRow(id){
@@ -1325,9 +1436,9 @@ function renderTemplatePreview(){
   const N=Math.max(30,maxEnd+4);
   const trackW=N*TEMPLATE_DAY_W,totalW=TEMPLATE_LABEL_W+trackW;
   const runGeom=templateBarGeom(1,runLength);
-  let h='<div class="template-days" style="width:'+totalW+'px"><div class="template-row-label">Day</div>';
+  let h='<div class="template-days" style="width:'+totalW+'px"><div class="template-row-label template-axis-label">Day</div>';
   for(let i=1;i<=N;i++)h+='<div class="template-day">'+i+'</div>';
-  h+='</div><div class="template-row" style="width:'+totalW+'px"><div class="template-row-label">Run</div><div class="template-row-track" style="width:'+trackW+'px"><div class="template-bar template-run-bar" data-template-run="1" style="left:'+runGeom.left+'px;width:'+runGeom.width+'px;background:'+color+'" title="Drag to resize run length"><span class="template-handle r" data-template-edge="r"></span></div></div></div>';
+  h+='</div><div class="template-row" style="width:'+totalW+'px"><div class="template-row-label template-axis-label">Run</div><div class="template-row-track" style="width:'+trackW+'px"><div class="template-bar template-run-bar" data-template-run="1" style="'+templateRunBarStyle(color,runGeom)+'" title="Drag to resize run length"><span class="template-handle r" data-template-edge="r"></span></div></div></div>';
   steps.forEach(s=>{
     const label=esc(s.name||"Step");
     const stepId=esc(s.id);
@@ -1440,6 +1551,7 @@ function openTemplateMaker(){
   document.getElementById("tmplColor").value=PALETTE[0];
   renderTemplateSteps();
   templateMakerModal.classList.add("open");
+  setTemplateLeftWidth(templateLeftW,false);
   document.getElementById("tmplName").focus();
 }
 function buildTemplatePayload(){
@@ -1861,6 +1973,7 @@ document.getElementById("scroll").addEventListener("scroll",()=>{
   });
 });
 window.addEventListener("resize",()=>{
+  syncDashboardMinHeight();
   clampDashboardHeightToViewport();
   if(listMode==="recent")render();
 });
@@ -2061,7 +2174,7 @@ document.getElementById("helpBtn").onclick=()=>{
     <p><code>Import JSON</code> is available after unlocking. It replaces your local draft with an exported backup; click <code>Save</code> to publish it.</p>
     <h2>Template Maker</h2>
     <ul>
-      <li>The template name is also the default run name.</li>
+      <li>Create templates for convenient future use.</li>
       <li>The template window can be resized.</li>
       <li>Drag preview bars or milestones to adjust step timing; drag bar edges to resize durations.</li>
       <li><code>sorted</code> turns to <code>sort</code> when row order no longer matches start-day order.</li>
