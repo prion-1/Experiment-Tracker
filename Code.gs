@@ -8,16 +8,18 @@
 const SHEET_NAME_RUNS  = 'runs';
 const SHEET_NAME_STEPS = 'steps';
 const SHEET_NAME_EDIT_LOG = 'edit_log';
+const SHEET_NAME_TEMPLATES = 'templates';
 const PROP_SS_ID       = 'GANTT_SHEET_ID';
 const PROP_LOCK        = 'GANTT_EDIT_LOCK';
 const PROP_SCHEMA_VERSION = 'GANTT_SCHEMA_VERSION';
 const PROP_DATA_VERSION = 'GANTT_DATA_VERSION';
 const PROP_LAST_EDIT   = 'GANTT_LAST_EDIT';
 const PROP_TIME_ZONE   = 'GANTT_TIME_ZONE';
-const SCHEMA_VERSION   = '3';
+const SCHEMA_VERSION   = '4';
 const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt'];
 const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version'];
 const EDIT_LOG_HEADERS = ['timestamp', 'editor', 'sessionId', 'runCount', 'stepCount'];
+const TEMPLATES_HEADERS = ['id', 'name', 'runName', 'color', 'runLength', 'stepsJson', 'createdAt', 'updatedAt', 'version'];
 const LOCK_TTL_MS   = 30 * 60 * 1000;  // 30 min — abandoned edit sessions expire
 
 // ----------------------------------------------------------------------------
@@ -103,6 +105,8 @@ function _createSpreadsheet(props) {
   steps.getRange(1, 1, 1, STEPS_HEADERS.length).setValues([STEPS_HEADERS]);
   const editLog = ss.insertSheet(SHEET_NAME_EDIT_LOG);
   editLog.getRange(1, 1, 1, EDIT_LOG_HEADERS.length).setValues([EDIT_LOG_HEADERS]);
+  const templates = ss.insertSheet(SHEET_NAME_TEMPLATES);
+  templates.getRange(1, 1, 1, TEMPLATES_HEADERS.length).setValues([TEMPLATES_HEADERS]);
   props.setProperty(PROP_SS_ID, ss.getId());
   props.setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
   props.setProperty(PROP_DATA_VERSION, '0');
@@ -141,6 +145,7 @@ function _ensureSchema(ss) {
   ensureSheet(SHEET_NAME_RUNS, RUNS_HEADERS);
   ensureSheet(SHEET_NAME_STEPS, STEPS_HEADERS);
   ensureSheet(SHEET_NAME_EDIT_LOG, EDIT_LOG_HEADERS);
+  ensureSheet(SHEET_NAME_TEMPLATES, TEMPLATES_HEADERS);
 }
 
 function _uid() { return 'id_' + Utilities.getUuid().replace(/-/g, '').slice(0, 12); }
@@ -381,6 +386,87 @@ function _normalizeSteps(steps, tz) {
   });
 }
 
+function _normalizeTemplateSteps(steps) {
+  return (steps || []).map(function (s) {
+    const startDay = Math.max(1, Math.round(Number(s.startDay) || Number(s.day) || 1));
+    const dur = Math.max(0, Math.round(Number(s.dur) || 0));
+    return {
+      id: String(s.id || _uid()),
+      name: String(s.name || ''),
+      startDay: startDay,
+      dur: dur
+    };
+  }).sort(function (a, b) {
+    return (a.startDay - b.startDay) || a.name.localeCompare(b.name);
+  });
+}
+
+function _templateEndDay(step) {
+  const dur = Math.max(Number(step.dur) || 0, 0);
+  return Number(step.startDay) + Math.max(dur || 1, 1) - 1;
+}
+
+function _normalizeTemplateInput(t) {
+  t = t || {};
+  const steps = _normalizeTemplateSteps(t.steps);
+  const maxStepEnd = steps.reduce(function (m, s) { return Math.max(m, _templateEndDay(s)); }, 1);
+  const runLength = Math.max(1, Math.round(Number(t.runLength) || maxStepEnd || 1));
+  const name = String(t.name || '').trim() || 'Untitled template';
+  return {
+    id: String(t.id || _uid()),
+    name: name,
+    runName: String(t.runName || '').trim() || name,
+    color: String(t.color || '#4169e8'),
+    runLength: Math.max(runLength, maxStepEnd),
+    steps: steps
+  };
+}
+
+function _loadTemplates(ss) {
+  const rows = _readAll(ss, SHEET_NAME_TEMPLATES);
+  return rows.map(function (row) {
+    let steps = [];
+    try {
+      steps = JSON.parse(String(row.stepsJson || '[]'));
+      if (!Array.isArray(steps)) steps = [];
+    } catch (e) {
+      steps = [];
+    }
+    const t = _normalizeTemplateInput({
+      id: row.id,
+      name: row.name,
+      runName: row.runName,
+      color: row.color,
+      runLength: row.runLength,
+      steps: steps
+    });
+    t.createdAt = row.createdAt instanceof Date ? row.createdAt.getTime() : Number(row.createdAt) || 0;
+    t.updatedAt = row.updatedAt instanceof Date ? row.updatedAt.getTime() : Number(row.updatedAt) || 0;
+    return t;
+  }).sort(function (a, b) {
+    return a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));
+  });
+}
+
+function _writeTemplates(ss, templates) {
+  const sh = ss.getSheetByName(SHEET_NAME_TEMPLATES);
+  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();
+  const rows = (templates || []).map(function (t) {
+    return [
+      t.id,
+      t.name,
+      t.runName,
+      t.color,
+      t.runLength,
+      JSON.stringify(t.steps || []),
+      t.createdAt || '',
+      t.updatedAt || '',
+      ''
+    ];
+  });
+  if (rows.length) sh.getRange(2, 1, rows.length, TEMPLATES_HEADERS.length).setValues(rows);
+}
+
 function _metaPayload() {
   const tz = _timeZone(null);
   return {
@@ -403,16 +489,18 @@ function _loadPayload(ss) {
     return r;
   });
   meta.steps = _normalizeSteps(stepsRaw, tz);
+  meta.templates = _loadTemplates(ss);
   meta.lastEdit = _readLastEdit(ss);
   meta.todayIso = _todayIso(tz);
   return meta;
 }
 
-function _payloadFromNormalized(runs, steps, lock, lastEdit, dataVersion, tz) {
+function _payloadFromNormalized(runs, steps, lock, lastEdit, dataVersion, tz, templates) {
   return {
     ok: true,
     runs: runs,
     steps: steps,
+    templates: templates || [],
     lock: lock,
     lastEdit: lastEdit,
     dataVersion: dataVersion,
@@ -531,8 +619,54 @@ function saveAll(sessionId, runs, steps) {
     SpreadsheetApp.flush();
     _writeLastEditProperty(lastEdit);
     const dataVersion = _bumpDataVersion();
+    const templates = _loadTemplates(ss);
     _clearLock();
-    return _payloadFromNormalized(normalizedRuns, normalizedSteps, null, lastEdit, dataVersion, tz);
+    return _payloadFromNormalized(normalizedRuns, normalizedSteps, null, lastEdit, dataVersion, tz, templates);
+  } finally {
+    scriptLock.releaseLock();
+  }
+}
+
+function saveTemplate(sessionId, template) {
+  _checkAccess();
+  if (!sessionId) return {ok: false, reason: 'bad_session'};
+  const scriptLock = LockService.getScriptLock();
+  if (!scriptLock.tryLock(10000)) return {ok: false, reason: 'busy'};
+  try {
+    const cur = _readLock();
+    if (!cur || cur.holder !== sessionId || _isLockExpired(cur)) {
+      return {
+        ok: false,
+        reason: 'no_lock',
+        message: 'Your edit session expired or was taken over. Unlock again before saving a template.'
+      };
+    }
+    const ss = _getSpreadsheet();
+    const normalized = _normalizeTemplateInput(template);
+    const now = Date.now();
+    const templates = _loadTemplates(ss);
+    const idx = templates.findIndex(function (t) { return t.id === normalized.id; });
+    if (idx >= 0) {
+      normalized.createdAt = templates[idx].createdAt || now;
+      normalized.updatedAt = now;
+      templates[idx] = normalized;
+    } else {
+      normalized.createdAt = now;
+      normalized.updatedAt = now;
+      templates.push(normalized);
+    }
+    templates.sort(function (a, b) {
+      return a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));
+    });
+    _writeTemplates(ss, templates);
+    SpreadsheetApp.flush();
+    const dataVersion = _bumpDataVersion();
+    const meta = _metaPayload();
+    meta.ok = true;
+    meta.templates = templates;
+    meta.dataVersion = dataVersion;
+    meta.lock = _readLock();
+    return meta;
   } finally {
     scriptLock.releaseLock();
   }

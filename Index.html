@@ -175,7 +175,10 @@
   .modal-bg{position:fixed;inset:0;background:rgba(56,68,96,.28);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100}
   .modal-bg.open{display:flex}
   .modal{background:var(--panel);border:1px solid var(--line-strong);border-radius:8px;width:360px;padding:22px;box-shadow:0 24px 64px rgba(54,70,101,.25),0 1px 0 rgba(255,255,255,.9) inset}
+  .modal.wide{width:min(980px,94vw);max-height:88vh;overflow:auto}
+  .modal.template-maker-window{resize:both;display:flex;flex-direction:column;height:min(620px,88vh);min-width:min(680px,94vw);min-height:380px;max-width:96vw;max-height:92vh}
   .modal h3{margin:0 0 16px;font-size:15px;font-weight:700;letter-spacing:0}
+  .modal h4{margin:0 0 10px;font-size:12px;font-weight:800;color:var(--txt);text-transform:uppercase}
   .modal-meta{margin:-8px 0 14px;color:var(--txt-faint);font-size:11px;font-family:"JetBrains Mono",monospace;line-height:1.35}
   .modal p{margin:0 0 12px;color:var(--txt-dim);font-size:12.5px;line-height:1.5}
   .field{margin-bottom:13px;display:flex;flex-direction:column;gap:6px}
@@ -192,6 +195,52 @@
   .modal-actions .spacer{flex:1}
   .btn.danger{background:#fff4f7;border-color:#f5bfd0;color:#b81f55}
   .btn.danger:hover:not(:disabled){background:#ffe7ef}
+  .template-fields{display:grid;grid-template-columns:minmax(260px,1fr) 92px 74px;gap:10px;align-items:end}
+  .template-fields input[type=color]{height:30px;padding:2px}
+  .template-editor{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:14px;margin-top:8px}
+  .template-maker-window .template-editor{flex:1;min-height:0}
+  .template-maker-window .template-editor>div{display:flex;flex-direction:column;min-height:0}
+  .template-step-list{display:flex;flex-direction:column;gap:7px;max-height:320px;overflow:auto;padding:7px;border:1px solid rgba(38,185,120,.72);border-radius:8px;background:rgba(38,185,120,.028);box-shadow:0 0 0 2px rgba(38,185,120,.08)}
+  .template-maker-window .template-step-list,.template-maker-window .template-preview-scroll{flex:1;min-height:150px;max-height:none}
+  .template-step-list.unsorted{border-color:rgba(242,53,114,.72);background:rgba(242,53,114,.026);box-shadow:0 0 0 2px rgba(242,53,114,.08)}
+  .template-step-head,.template-step-row{display:grid;grid-template-columns:minmax(0,1fr) 58px 64px 72px 28px;gap:6px;align-items:center;min-width:320px}
+  .template-step-head{color:var(--txt-faint);font-size:10px;font-weight:800;text-transform:uppercase}
+  .template-step-head span:nth-child(4){text-align:center}
+  .template-step-row input[type=checkbox]{width:auto;justify-self:center}
+  .template-step-row .iconbtn{font-size:13px}
+  .template-side-actions{display:flex;align-items:center;gap:7px;margin:8px 0 10px}
+  .template-sort-btn{min-width:70px}
+  .template-sort-btn:disabled{opacity:1;cursor:default}
+  .template-sort-btn.sorted{border-color:rgba(38,185,120,.72);color:#1d8d5f;background:#f3fff8}
+  .template-sort-btn.unsorted{border-color:rgba(242,53,114,.58);color:#b81f55;background:#fff4f7}
+  .template-preview-scroll{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg-2);max-height:360px}
+  .template-preview{position:relative;width:max-content;min-width:100%;font-size:12px}
+  .template-days{position:sticky;top:0;z-index:2;height:28px;background:var(--panel);border-bottom:1px solid var(--line);display:flex}
+  .template-day{width:28px;min-width:28px;display:flex;align-items:center;justify-content:center;border-left:1px solid var(--line);font-family:"JetBrains Mono",monospace;color:var(--txt-dim);font-size:10px}
+  .template-row{height:28px;position:relative;border-bottom:1px solid var(--line)}
+  .template-row-label{position:sticky;left:0;z-index:1;width:120px;height:100%;display:flex;align-items:center;padding:0 8px;background:var(--panel);border-right:1px solid var(--line);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .template-row-track{position:absolute;left:120px;top:0;height:100%;background-image:repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 28px)}
+  .template-bar{position:absolute;top:50%;transform:translateY(-50%);height:14px;border-radius:0;background:var(--accent);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18);cursor:grab;touch-action:none}
+  .template-run-bar{cursor:ew-resize}
+  .template-ms{position:absolute;top:50%;width:12px;height:12px;transform:translate(-50%,-50%) rotate(45deg);border-radius:2px;background:var(--accent);box-shadow:0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18);cursor:grab;touch-action:none}
+  .template-handle{position:absolute;top:-2px;bottom:-2px;width:8px;cursor:ew-resize;z-index:2}
+  .template-handle.l{left:-2px}.template-handle.r{right:-2px}
+  .template-handle:hover{background:rgba(255,255,255,.42)}
+  .template-selector{display:grid;grid-template-columns:minmax(190px,260px) minmax(0,1fr);gap:14px;min-height:300px}
+  .template-list{border:1px solid var(--line);border-radius:8px;background:var(--bg-2);overflow:auto}
+  .template-list button{width:100%;display:block;text-align:left;border:none;border-bottom:1px solid var(--line);background:transparent;padding:9px 11px;cursor:pointer;font-weight:700;color:var(--txt)}
+  .template-list button:hover{background:#fff}
+  .template-list button.active{background:#fff8dd;color:var(--txt)}
+  .template-detail{border:1px solid var(--line);border-radius:8px;background:var(--bg-2);padding:12px;overflow:auto}
+  .template-param-list{display:flex;flex-direction:column;gap:6px}
+  .template-param{display:grid;grid-template-columns:72px minmax(0,1fr) 64px;gap:8px;align-items:center;padding:7px 8px;border:1px solid var(--line);border-radius:7px;background:#fff}
+  .template-param .day{font-family:"JetBrains Mono",monospace;color:var(--txt-dim);font-size:11px}
+  .template-param .name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .template-param .dur{text-align:right;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px}
+  @media (max-width:780px){
+    .template-fields,.template-editor,.template-selector{grid-template-columns:1fr}
+    .template-step-head,.template-step-row{grid-template-columns:minmax(90px,1fr) 54px 58px 68px 26px}
+  }
 
   #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--panel);border:1px solid var(--accent-2);color:var(--txt);padding:11px 18px;border-radius:8px;font-size:12.5px;z-index:200;box-shadow:0 12px 28px rgba(54,70,101,.2);opacity:0;transition:opacity .2s, transform .2s;pointer-events:none;max-width:90vw}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -260,6 +309,7 @@
 
       <!-- edit mode -->
       <button class="btn edit-only" id="addRunBtn">+ Add run</button>
+      <button class="btn edit-only" id="templateMakerBtn">Template maker</button>
       <button class="btn edit-only" id="importBtn">Import JSON</button>
       <input type="file" id="importInput" accept="application/json,.json" style="display:none">
       <button class="btn edit-only" id="cancelBtn">Cancel</button>
@@ -283,7 +333,7 @@
   <h3 id="runModalTitle">Add run</h3>
   <div class="field"><label>Run name</label><input type="text" id="runName" placeholder="e.g. iNGN2 diff – line 42"></div>
   <div class="field"><label>Colour</label><div class="swatches" id="runSwatches"></div></div>
-  <div class="modal-actions"><button class="btn danger" id="runDelete" style="display:none">Delete</button><div class="spacer"></div><button class="btn" id="runCancel">Cancel</button><button class="btn primary" id="runSave">Save</button></div>
+  <div class="modal-actions"><button class="btn danger" id="runDelete" style="display:none">Delete</button><button class="btn" id="runTemplateBtn" type="button">Use template</button><div class="spacer"></div><button class="btn" id="runCancel">Cancel</button><button class="btn primary" id="runSave">Save</button></div>
 </div></div>
 
 <!-- step modal -->
@@ -296,6 +346,38 @@
   <div class="field"><label>Start date</label><input type="date" id="stepStart"></div>
   <div class="field" id="durWrap"><label>Duration (days)</label><input type="number" id="stepDur" min="1" value="1"></div>
   <div class="modal-actions"><button class="btn danger" id="stepDelete" style="display:none">Delete</button><div class="spacer"></div><button class="btn" id="stepCancel">Cancel</button><button class="btn primary" id="stepSave">Save</button></div>
+</div></div>
+
+<!-- template maker modal -->
+<div class="modal-bg" id="templateMakerModal"><div class="modal wide template-maker-window">
+  <h3>Template maker</h3>
+  <div class="template-fields">
+    <div class="field"><label>Template name</label><input type="text" id="tmplName" placeholder="e.g. iNGN2 standard diff"></div>
+    <div class="field"><label>Run length</label><input type="number" id="tmplRunLength" min="1" value="14"></div>
+    <div class="field"><label>Colour</label><input type="color" id="tmplColor" value="#4169e8"></div>
+  </div>
+  <div class="template-editor">
+    <div>
+      <h4>Steps</h4>
+      <div class="template-side-actions"><button class="btn" type="button" id="tmplAddStep">+ Add step</button><button class="btn template-sort-btn sorted" type="button" id="tmplSortSteps" disabled>sorted</button></div>
+      <div class="template-step-list" id="tmplStepList"></div>
+    </div>
+    <div>
+      <h4>Preview</h4>
+      <div class="template-preview-scroll"><div class="template-preview" id="tmplPreview"></div></div>
+    </div>
+  </div>
+  <div class="modal-actions"><div class="spacer"></div><button class="btn" id="tmplCancel">Cancel</button><button class="btn primary" id="tmplSave">Save template</button></div>
+</div></div>
+
+<!-- template selector modal -->
+<div class="modal-bg" id="templateSelectModal"><div class="modal wide">
+  <h3>Use template</h3>
+  <div class="template-selector">
+    <div class="template-list" id="templateList"></div>
+    <div class="template-detail" id="templateDetail"></div>
+  </div>
+  <div class="modal-actions"><div class="spacer"></div><button class="btn" id="templateSelectCancel">Cancel</button><button class="btn primary" id="templateSelectUse">Use template</button></div>
 </div></div>
 
 <!-- name-prompt modal (shown on each unlock) -->
@@ -401,12 +483,16 @@ let viewRenderQueued=false;
 let lastViewKey="";
 let lastEdit=null;
 let dataVersion="";
+let templatesRaw=[];
 let highlightedRows=new Set();
 let highlightedDashboardTask="";
+let templateDraftSteps=[];
+let selectedTemplateId="";
 
 const runRowKey=rid=>"run:"+rid;
 const stepRowKey=(rid,sid)=>"step:"+rid+":"+sid;
 const dashboardTaskKey=(rid,sid,iso)=>JSON.stringify([String(rid||""),String(sid||""),String(iso||"")]);
+const TEMPLATE_DAY_W=28,TEMPLATE_LABEL_W=120,TEMPLATE_MIN_BAR_W=14;
 
 function reconcileActiveOpenRuns(){
   const activeRunIds=new Set(stepsRaw.filter(isOpenActive).map(s=>s.runId));
@@ -450,6 +536,38 @@ function runSpan(run){
   if(stopped)end=Math.max(end,dayIndex(stopped)+1);
   else if(span.start<=dayIndex(isoToday()))end=Math.max(end,dayIndex(isoToday())+1);
   return{start:span.start,end};
+}
+
+function normalizeTemplateClient(t){
+  const steps=(t&&Array.isArray(t.steps)?t.steps:[]).map((s,i)=>({
+    id:String(s.id||newId()),
+    name:String(s.name||""),
+    startDay:Math.max(1,Math.round(Number(s.startDay)||1)),
+    dur:Math.max(0,Math.round(Number(s.dur)||0)),
+    order:i
+  })).sort((a,b)=>(a.startDay-b.startDay)||a.name.localeCompare(b.name));
+  const maxEnd=steps.reduce((m,s)=>Math.max(m,s.startDay+Math.max(s.dur||1,1)-1),1);
+  return {
+    id:String(t&&t.id||newId()),
+    name:String(t&&t.name||"Untitled template"),
+    runName:String(t&&t.runName||t&&t.name||"Untitled run"),
+    color:String(t&&t.color||PALETTE[0]),
+    runLength:Math.max(1,Math.round(Number(t&&t.runLength)||maxEnd),maxEnd),
+    steps
+  };
+}
+function syncTemplates(list){
+  if(Array.isArray(list))templatesRaw=list.map(normalizeTemplateClient);
+  syncTemplateButtons();
+}
+function syncTemplateButtons(){
+  const btn=document.getElementById("runTemplateBtn");
+  if(btn){
+    const addMode=!runEditId;
+    btn.disabled=!editMode||!addMode||!templatesRaw.length;
+    btn.title=templatesRaw.length?"Choose a saved template":"No templates saved yet";
+    btn.style.display=addMode?"":"none";
+  }
 }
 
 // ---------- toast ----------
@@ -524,6 +642,8 @@ function setEditMode(on){
   document.getElementById("cancelBtn").disabled=!editMode;
   document.getElementById("addRunBtn").disabled=!editMode;
   document.getElementById("importBtn").disabled=!editMode;
+  document.getElementById("templateMakerBtn").disabled=!editMode;
+  syncTemplateButtons();
   syncUnlockButton();
   refreshStatus();
 }
@@ -585,6 +705,7 @@ function applyLoad(payload,opts){
   const hadData=firstLoadDone||runsRaw.length>0||stepsRaw.length>0;
   const remoteVersion=syncServerMeta(payload,true);
   const shouldRender=(opts&&opts.force)||!hadData||!remoteVersion||remoteVersion!==prevVersion;
+  if(payload.templates)syncTemplates(payload.templates);
   if(shouldRender){
     runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||"")}));
     stepsRaw=payload.steps||[];
@@ -1059,7 +1180,7 @@ function syncSw(){let m=false;[...runSwatches.querySelectorAll(".sw[data-c]")].f
 function openRun(id){if(!editMode)return; runEditId=id;const t=document.getElementById("runModalTitle"),del=document.getElementById("runDelete");
   if(id){const r=getRun(id);document.getElementById("runName").value=r.name;runColor=r.color;t.textContent="Edit run";del.style.display="";}
   else{document.getElementById("runName").value="";runColor=PALETTE[runsRaw.length%PALETTE.length];t.textContent="Add run";del.style.display="none";}
-  syncSw();runModal.classList.add("open");document.getElementById("runName").focus();}
+  syncSw();syncTemplateButtons();runModal.classList.add("open");document.getElementById("runName").focus();}
 document.getElementById("runCancel").onclick=()=>runModal.classList.remove("open");
 document.getElementById("runSave").onclick=()=>{
   const name=document.getElementById("runName").value.trim()||"Untitled run";
@@ -1081,6 +1202,377 @@ document.getElementById("runDelete").onclick=()=>{
   runsRaw=runsRaw.filter(r=>r.id!==id);
   stepsRaw=stepsRaw.filter(s=>s.runId!==id);
   buildModel();render();
+};
+
+// ---------- templates ----------
+const templateMakerModal=document.getElementById("templateMakerModal");
+const templateSelectModal=document.getElementById("templateSelectModal");
+function templateStepEnd(s){return Math.max(1,Number(s.startDay)||1)+Math.max(Number(s.dur)||1,1)-1;}
+function templateStepStartDay(s){
+  return Math.max(1,Number(s&&s.startDay)||1);
+}
+function templateCellCenter(day){
+  return (Math.max(1,Number(day)||1)-0.5)*TEMPLATE_DAY_W;
+}
+function templateBarGeom(startDay,days){
+  const start=Math.max(1,Number(startDay)||1);
+  const dur=Math.max(1,Math.round(Number(days)||1));
+  const left=templateCellCenter(start);
+  const width=templateCellCenter(start+dur-1)-left;
+  if(width<=0)return {left:left-TEMPLATE_MIN_BAR_W/2,width:TEMPLATE_MIN_BAR_W};
+  return {left:left,width};
+}
+function templateStepHeadHtml(){
+  return '<div class="template-step-head"><span>Name</span><span>Start</span><span>Duration</span><span>Milestone</span><span></span></div>';
+}
+function templateOrderIsSorted(){
+  for(let i=1;i<templateDraftSteps.length;i++){
+    if(templateStepStartDay(templateDraftSteps[i])<templateStepStartDay(templateDraftSteps[i-1]))return false;
+  }
+  return true;
+}
+function templateStepsInTemporalOrder(){
+  return templateDraftSteps.map((s,i)=>Object.assign({},s,{_order:i})).sort((a,b)=>{
+    return (templateStepStartDay(a)-templateStepStartDay(b))||(a._order-b._order);
+  }).map(s=>{
+    delete s._order;
+    return s;
+  });
+}
+function syncTemplateSortState(){
+  const list=document.getElementById("tmplStepList");
+  const btn=document.getElementById("tmplSortSteps");
+  if(!list||!btn)return;
+  const sorted=templateOrderIsSorted();
+  list.classList.toggle("unsorted",!sorted);
+  btn.disabled=sorted;
+  btn.textContent=sorted?"sorted":"sort";
+  btn.classList.toggle("sorted",sorted);
+  btn.classList.toggle("unsorted",!sorted);
+}
+function templateMinRunLength(){
+  return templateDraftSteps.reduce((m,s)=>Math.max(m,templateStepEnd(s)),1);
+}
+function templateRunLengthValue(){
+  return Math.max(templateMinRunLength(),Math.round(Number(document.getElementById("tmplRunLength").value)||14));
+}
+function templateStepById(id){
+  return templateDraftSteps.find(s=>String(s.id)===String(id));
+}
+function templateStepRowById(id){
+  return [...document.querySelectorAll("#tmplStepList .template-step-row")].find(row=>row.dataset.id===String(id));
+}
+function setTemplateRunLengthDays(days){
+  document.getElementById("tmplRunLength").value=Math.max(templateMinRunLength(),Math.round(Number(days)||1));
+}
+function syncTemplateRunBar(){
+  const runBar=document.querySelector("#tmplPreview .template-run-bar");
+  if(runBar){
+    const geom=templateBarGeom(1,templateRunLengthValue());
+    runBar.style.left=geom.left+"px";
+    runBar.style.width=geom.width+"px";
+  }
+}
+function syncTemplateStepRow(id){
+  const s=templateStepById(id),row=templateStepRowById(id);
+  if(!s||!row)return;
+  row.querySelector('[data-k="startDay"]').value=Math.max(1,Number(s.startDay)||1);
+  const milestone=Number(s.dur)===0;
+  const dur=row.querySelector('[data-k="dur"]');
+  row.querySelector('[data-k="milestone"]').checked=milestone;
+  dur.value=Math.max(1,Number(s.dur)||1);
+  dur.disabled=milestone;
+  syncTemplateSortState();
+}
+function readTemplateDraftFromDom(){
+  const rows=[...document.querySelectorAll("#tmplStepList .template-step-row")];
+  templateDraftSteps=rows.map((row,i)=>{
+    const name=row.querySelector('[data-k="name"]').value.trim();
+    const startDay=Math.max(1,Math.round(Number(row.querySelector('[data-k="startDay"]').value)||1));
+    const milestone=row.querySelector('[data-k="milestone"]').checked;
+    const dur=milestone?0:Math.max(1,Math.round(Number(row.querySelector('[data-k="dur"]').value)||1));
+    return {id:row.dataset.id||newId(),name,startDay,dur,order:i};
+  });
+}
+function renderTemplateSteps(){
+  const list=document.getElementById("tmplStepList");
+  if(!templateDraftSteps.length){
+    list.innerHTML=templateStepHeadHtml()+'<div class="dash-empty">No steps yet.</div>';
+    renderTemplatePreview();
+    syncTemplateSortState();
+    return;
+  }
+  list.innerHTML=templateStepHeadHtml()+templateDraftSteps.map((s,i)=>`
+    <div class="template-step-row" data-i="${i}" data-id="${esc(s.id)}">
+      <input type="text" data-k="name" value="${esc(s.name)}" placeholder="Step name">
+      <input type="number" data-k="startDay" min="1" value="${Math.max(1,Number(s.startDay)||1)}" title="Start day">
+      <input type="number" data-k="dur" min="1" value="${Math.max(1,Number(s.dur)||1)}" title="Duration" ${Number(s.dur)===0?"disabled":""}>
+      <input type="checkbox" data-k="milestone" title="Milestone" ${Number(s.dur)===0?"checked":""}>
+      <button class="iconbtn" type="button" data-act="del-template-step" title="Delete step">×</button>
+    </div>
+  `).join("");
+  renderTemplatePreview();
+  syncTemplateSortState();
+}
+function renderTemplatePreview(){
+  const preview=document.getElementById("tmplPreview");
+  if(!preview)return;
+  const runLength=templateRunLengthValue();
+  setTemplateRunLengthDays(runLength);
+  const color=document.getElementById("tmplColor").value||PALETTE[0];
+  const steps=templateStepsInTemporalOrder();
+  const maxEnd=steps.reduce((m,s)=>Math.max(m,templateStepEnd(s)),runLength);
+  const N=Math.max(30,maxEnd+4);
+  const trackW=N*TEMPLATE_DAY_W,totalW=TEMPLATE_LABEL_W+trackW;
+  const runGeom=templateBarGeom(1,runLength);
+  let h='<div class="template-days" style="width:'+totalW+'px"><div class="template-row-label">Day</div>';
+  for(let i=1;i<=N;i++)h+='<div class="template-day">'+i+'</div>';
+  h+='</div><div class="template-row" style="width:'+totalW+'px"><div class="template-row-label">Run</div><div class="template-row-track" style="width:'+trackW+'px"><div class="template-bar template-run-bar" data-template-run="1" style="left:'+runGeom.left+'px;width:'+runGeom.width+'px;background:'+color+'" title="Drag to resize run length"><span class="template-handle r" data-template-edge="r"></span></div></div></div>';
+  steps.forEach(s=>{
+    const label=esc(s.name||"Step");
+    const stepId=esc(s.id);
+    h+='<div class="template-row" style="width:'+totalW+'px"><div class="template-row-label" title="'+label+'">'+label+'</div><div class="template-row-track" style="width:'+trackW+'px">';
+    if(Number(s.dur)===0)h+='<div class="template-ms" data-template-step="'+stepId+'" style="left:'+templateCellCenter(s.startDay)+'px;background:'+color+'" title="Drag to move milestone"></div>';
+    else {
+      const geom=templateBarGeom(s.startDay,s.dur);
+      h+='<div class="template-bar" data-template-step="'+stepId+'" style="left:'+geom.left+'px;width:'+geom.width+'px;background:'+color+'" title="Drag to move; drag edges to resize"><span class="template-handle l" data-template-edge="l"></span><span class="template-handle r" data-template-edge="r"></span></div>';
+    }
+    h+='</div></div>';
+  });
+  preview.innerHTML=h;
+}
+let templateDrag=null;
+function updateTemplatePreviewDrag(e){
+  if(!templateDrag)return;
+  const d=Math.round((e.clientX-templateDrag.startX)/TEMPLATE_DAY_W);
+  const node=templateDrag.node;
+  if(templateDrag.kind==="run"){
+    const len=Math.max(1,templateDrag.origLength+d);
+    setTemplateRunLengthDays(len);
+    const geom=templateBarGeom(1,templateRunLengthValue());
+    node.style.left=geom.left+"px";
+    node.style.width=geom.width+"px";
+    return;
+  }
+  const s=templateStepById(templateDrag.stepId);
+  if(!s)return;
+  if(templateDrag.kind==="milestone"){
+    const startDay=Math.max(1,templateDrag.origStart+d);
+    s.startDay=startDay;
+    node.style.left=templateCellCenter(startDay)+"px";
+    setTemplateRunLengthDays(templateDrag.origRunLength);
+    syncTemplateRunBar();
+    syncTemplateStepRow(templateDrag.stepId);
+    return;
+  }
+  let startDay=templateDrag.origStart,dur=templateDrag.origDur;
+  if(templateDrag.edge==="r"){
+    dur=Math.max(1,templateDrag.origDur+d);
+  }else if(templateDrag.edge==="l"){
+    const origEnd=templateDrag.origStart+templateDrag.origDur-1;
+    startDay=clamp(templateDrag.origStart+d,1,origEnd);
+    dur=origEnd-startDay+1;
+  }else{
+    startDay=Math.max(1,templateDrag.origStart+d);
+  }
+  s.startDay=startDay;
+  s.dur=dur;
+  const geom=templateBarGeom(startDay,dur);
+  node.style.left=geom.left+"px";
+  node.style.width=geom.width+"px";
+  setTemplateRunLengthDays(templateDrag.origRunLength);
+  syncTemplateRunBar();
+  syncTemplateStepRow(templateDrag.stepId);
+}
+function endTemplatePreviewDrag(){
+  if(!templateDrag)return;
+  try{templateDrag.node.releasePointerCapture(templateDrag.pointerId);}catch(err){}
+  const kind=templateDrag.kind;
+  templateDrag=null;
+  document.body.classList.remove("dragging");
+  window.removeEventListener("pointermove",updateTemplatePreviewDrag);
+  window.removeEventListener("pointerup",endTemplatePreviewDrag);
+  window.removeEventListener("pointercancel",endTemplatePreviewDrag);
+  if(kind==="run")renderTemplatePreview();
+  else renderTemplateSteps();
+}
+document.getElementById("tmplPreview").addEventListener("pointerdown",e=>{
+  const node=e.target.closest(".template-bar,.template-ms");
+  if(!node)return;
+  e.preventDefault();
+  readTemplateDraftFromDom();
+  if(node.dataset.templateRun==="1"){
+    templateDrag={
+      kind:"run",
+      node,
+      pointerId:e.pointerId,
+      startX:e.clientX,
+      origLength:templateRunLengthValue()
+    };
+  }else{
+    const stepId=node.dataset.templateStep;
+    const s=templateStepById(stepId);
+    if(!s)return;
+    const edgeNode=e.target.closest(".template-handle");
+    templateDrag={
+      kind:Number(s.dur)===0?"milestone":"step",
+      node,
+      pointerId:e.pointerId,
+      startX:e.clientX,
+      stepId,
+      edge:edgeNode?edgeNode.dataset.templateEdge:"move",
+      origStart:Math.max(1,Number(s.startDay)||1),
+      origDur:Math.max(1,Number(s.dur)||1),
+      origRunLength:templateRunLengthValue()
+    };
+  }
+  document.body.classList.add("dragging");
+  try{node.setPointerCapture(e.pointerId);}catch(err){}
+  window.addEventListener("pointermove",updateTemplatePreviewDrag);
+  window.addEventListener("pointerup",endTemplatePreviewDrag);
+  window.addEventListener("pointercancel",endTemplatePreviewDrag);
+});
+function openTemplateMaker(){
+  if(!editMode)return;
+  templateDraftSteps=[];
+  document.getElementById("tmplName").value="";
+  document.getElementById("tmplRunLength").value=14;
+  document.getElementById("tmplColor").value=PALETTE[0];
+  renderTemplateSteps();
+  templateMakerModal.classList.add("open");
+  document.getElementById("tmplName").focus();
+}
+function buildTemplatePayload(){
+  readTemplateDraftFromDom();
+  const templateName=document.getElementById("tmplName").value.trim()||"Untitled template";
+  const steps=templateDraftSteps.map(s=>Object.assign({},s,{name:s.name||"Untitled step"}));
+  const maxEnd=steps.reduce((m,s)=>Math.max(m,templateStepEnd(s)),1);
+  return {
+    name:templateName,
+    runName:templateName,
+    color:document.getElementById("tmplColor").value||PALETTE[0],
+    runLength:Math.max(1,Math.round(Number(document.getElementById("tmplRunLength").value)||maxEnd),maxEnd),
+    steps
+  };
+}
+function renderTemplateSelector(){
+  const list=document.getElementById("templateList");
+  const detail=document.getElementById("templateDetail");
+  if(!templatesRaw.length){
+    list.innerHTML='<div class="dash-empty">No templates saved.</div>';
+    detail.innerHTML='<p>No template is available yet.</p>';
+    document.getElementById("templateSelectUse").disabled=true;
+    return;
+  }
+  if(!templatesRaw.some(t=>t.id===selectedTemplateId))selectedTemplateId=templatesRaw[0].id;
+  list.innerHTML=templatesRaw.map(t=>'<button type="button" data-id="'+esc(t.id)+'" class="'+(t.id===selectedTemplateId?"active":"")+'">'+esc(t.name)+'</button>').join("");
+  const t=templatesRaw.find(x=>x.id===selectedTemplateId);
+  document.getElementById("templateSelectUse").disabled=!t;
+  if(!t){detail.innerHTML="";return;}
+  const steps=t.steps.slice().sort((a,b)=>(a.startDay-b.startDay)||a.name.localeCompare(b.name));
+  detail.innerHTML='<h4>'+esc(t.name)+'</h4><div class="template-param-list">'+
+    '<div class="template-param"><span class="day">Run</span><span class="name">'+esc(t.runName||t.name)+'</span><span class="dur">'+t.runLength+' d</span></div>'+
+    (steps.length?steps.map(s=>'<div class="template-param"><span class="day">Day '+s.startDay+'</span><span class="name">'+esc(s.name||"Untitled step")+'</span><span class="dur">'+(Number(s.dur)===0?"step":(s.dur+" d"))+'</span></div>').join(""):'<div class="dash-empty">No steps in this template.</div>')+
+  '</div>';
+}
+function openTemplateSelector(){
+  if(!templatesRaw.length){toast("No templates saved yet.");return;}
+  selectedTemplateId=templatesRaw[0].id;
+  renderTemplateSelector();
+  templateSelectModal.classList.add("open");
+}
+function placeTemplateRun(t){
+  if(!t)return;
+  const start=isoToday(),rid=newId();
+  const order=runsRaw.reduce((m,r)=>Math.max(m,r.order||0),0)+1;
+  runsRaw.push({
+    id:rid,
+    name:t.runName||t.name||"Untitled run",
+    color:t.color||PALETTE[0],
+    order,
+    stoppedAt:addIsoDays(start,Math.max(1,t.runLength||1)-1)
+  });
+  t.steps.forEach(s=>{
+    stepsRaw.push({
+      id:newId(),
+      runId:rid,
+      name:s.name||"Untitled step",
+      start:addIsoDays(start,Math.max(1,s.startDay||1)-1),
+      dur:Math.max(0,Math.round(Number(s.dur)||0)),
+      mode:"fixed",
+      stoppedAt:""
+    });
+  });
+  runModal.classList.remove("open");
+  templateSelectModal.classList.remove("open");
+  buildModel();
+  render();
+  centerToday();
+  toast("Template placed starting today. Save to publish.");
+}
+document.getElementById("templateMakerBtn").onclick=openTemplateMaker;
+document.getElementById("runTemplateBtn").onclick=openTemplateSelector;
+document.getElementById("tmplAddStep").onclick=()=>{
+  readTemplateDraftFromDom();
+  templateDraftSteps.push({id:newId(),name:"",startDay:1,dur:1});
+  renderTemplateSteps();
+};
+document.getElementById("tmplSortSteps").onclick=()=>{
+  readTemplateDraftFromDom();
+  templateDraftSteps=templateStepsInTemporalOrder();
+  renderTemplateSteps();
+};
+document.getElementById("tmplStepList").addEventListener("input",e=>{
+  const row=e.target.closest(".template-step-row");
+  if(row&&e.target.dataset.k==="milestone"){
+    row.querySelector('[data-k="dur"]').disabled=e.target.checked;
+  }
+  readTemplateDraftFromDom();
+  renderTemplatePreview();
+  syncTemplateSortState();
+});
+document.getElementById("tmplStepList").addEventListener("change",e=>{
+  if(e.target.dataset.k!=="milestone")return;
+  const row=e.target.closest(".template-step-row");
+  if(row)row.querySelector('[data-k="dur"]').disabled=e.target.checked;
+  readTemplateDraftFromDom();
+  renderTemplatePreview();
+  syncTemplateSortState();
+});
+document.getElementById("tmplStepList").addEventListener("click",e=>{
+  const btn=e.target.closest('[data-act="del-template-step"]');if(!btn)return;
+  readTemplateDraftFromDom();
+  const row=btn.closest(".template-step-row"),idx=Number(row.dataset.i);
+  templateDraftSteps.splice(idx,1);
+  renderTemplateSteps();
+});
+["tmplRunLength","tmplColor"].forEach(id=>document.getElementById(id).addEventListener("input",renderTemplatePreview));
+document.getElementById("tmplCancel").onclick=()=>templateMakerModal.classList.remove("open");
+document.getElementById("tmplSave").onclick=async()=>{
+  const btn=document.getElementById("tmplSave"),old=btn.textContent;
+  const payload=buildTemplatePayload();
+  if(!payload.steps.length){toast("Add at least one step before saving a template.");return;}
+  btn.disabled=true;btn.textContent="Saving...";
+  try{
+    const r=await call("saveTemplate",[sessionId,payload]);
+    if(r&&r.ok){
+      syncServerMeta(r,true);
+      syncTemplates(r.templates||[]);
+      templateMakerModal.classList.remove("open");
+      toast("Template saved.");
+    } else if(r&&r.reason==="no_lock")toast(r.message||"Unlock again before saving a template.");
+    else toast("Could not save template.");
+  }catch(e){showErr(e);}
+  finally{btn.disabled=false;btn.textContent=old;}
+};
+document.getElementById("templateList").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-id]");if(!btn)return;
+  selectedTemplateId=btn.dataset.id;
+  renderTemplateSelector();
+});
+document.getElementById("templateSelectCancel").onclick=()=>templateSelectModal.classList.remove("open");
+document.getElementById("templateSelectUse").onclick=()=>{
+  placeTemplateRun(templatesRaw.find(t=>t.id===selectedTemplateId));
 };
 
 // ---------- step modal (local-only edits) ----------
@@ -1171,7 +1663,7 @@ document.getElementById("stepDelete").onclick=()=>{
   if(wasActive&&!hasActiveOpenSteps(rid)&&maybePromptStopRun(rid,"Deleted step. Run line continues."))return;
   buildModel();render();
 };
-[runModal,stepModal].forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("open");}));
+[runModal,stepModal,templateMakerModal,templateSelectModal].forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("open");}));
 
 // ---------- name modal (shown on each unlock) ----------
 const nameModal=document.getElementById("nameModal");
@@ -1382,7 +1874,8 @@ function exportPayload(source){
     source,
     schema:{
       runs:["id","name","color","order","stoppedAt"],
-      steps:["id","runId","name","start","dur","mode","stoppedAt"]
+      steps:["id","runId","name","start","dur","mode","stoppedAt"],
+      templates:["id","name","runName","color","runLength","steps"]
     },
     runs:runsRaw.map(r=>({
       id:String(r.id||""),
@@ -1399,6 +1892,19 @@ function exportPayload(source){
       dur:Number(s.dur)||0,
       mode:isOpen(s)?"open":"fixed",
       stoppedAt:isOpen(s)?String(s.stoppedAt||""):""
+    })),
+    templates:templatesRaw.map(t=>({
+      id:String(t.id||""),
+      name:String(t.name||""),
+      runName:String(t.runName||""),
+      color:String(t.color||""),
+      runLength:Number(t.runLength)||1,
+      steps:(t.steps||[]).map(s=>({
+        id:String(s.id||""),
+        name:String(s.name||""),
+        startDay:Number(s.startDay)||1,
+        dur:Number(s.dur)||0
+      }))
     }))
   };
 }
@@ -1532,6 +2038,8 @@ document.getElementById("helpBtn").onclick=()=>{
     <h2>Runs and Steps</h2>
     <ul>
       <li><code>Add run</code> creates a row group with its own colour.</li>
+      <li><code>Template maker</code> saves reusable one-run templates with fixed steps only.</li>
+      <li><code>Use template</code> in <code>Add run</code> places a saved template starting today; edit it afterward like any run.</li>
       <li>New runs stay open-ended until their run-level <code>Stop</code> button is used.</li>
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
@@ -1549,8 +2057,15 @@ document.getElementById("helpBtn").onclick=()=>{
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
-    <p><code>Export JSON</code> downloads the full run and step database, including ids and open-ended step fields. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
+    <p><code>Export JSON</code> downloads the run, step, and template database. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
     <p><code>Import JSON</code> is available after unlocking. It replaces your local draft with an exported backup; click <code>Save</code> to publish it.</p>
+    <h2>Template Maker</h2>
+    <ul>
+      <li>The template name is also the default run name.</li>
+      <li>The template window can be resized.</li>
+      <li>Drag preview bars or milestones to adjust step timing; drag bar edges to resize durations.</li>
+      <li><code>sorted</code> turns to <code>sort</code> when row order no longer matches start-day order.</li>
+    </ul>
     <br>
     <p align="center">valentin@westmeyerlab</p>
   </main></body></html>`;
