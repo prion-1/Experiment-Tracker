@@ -39,6 +39,8 @@
   body.dragging{user-select:none;cursor:grabbing}
   body.resizing-labels{user-select:none;cursor:col-resize}
   body.resizing-labels *{cursor:col-resize !important}
+  body.resizing-dashboard{user-select:none;cursor:row-resize}
+  body.resizing-dashboard *{cursor:row-resize !important}
 
   /* edit-mode / read-mode visibility helpers */
   body:not(.edit-mode) .edit-only{display:none !important}
@@ -209,7 +211,11 @@
   .mode-switch input:checked ~ .mode-open{color:var(--accent)}
   .stopbtn{border:1px solid rgba(242,53,114,.35);background:#fff4f7;color:#b81f55;border-radius:999px;padding:2px 8px;font-size:.78em;font-weight:700;cursor:pointer}
   .stopbtn:hover{background:#ffe5ee}
-  .dashboard{border-top:1px solid var(--line);background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:8px 16px 10px;max-height:170px;overflow:auto}
+  .dashboard-resizer{height:7px;flex:0 0 7px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);cursor:row-resize;position:relative}
+  .dashboard-resizer::before{content:"";position:absolute;left:50%;top:50%;width:42px;height:3px;border-top:1px solid var(--line-strong);border-bottom:1px solid rgba(255,255,255,.9);transform:translate(-50%,-50%);border-radius:999px}
+  .dashboard-resizer:hover::before,body.resizing-dashboard .dashboard-resizer::before{border-top-color:var(--accent)}
+  .dashboard{background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:8px 16px 10px;max-height:170px;min-height:72px;overflow:auto;flex:0 0 auto}
+  .dashboard.sized{height:var(--dashboard-h);max-height:none}
   .dash-title{grid-column:1/-1;color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
   .dash-day{min-width:0;border:1px solid rgba(38,185,120,.62);border-radius:8px;padding:7px 9px;background:rgba(38,185,120,.035);box-shadow:0 1px 0 rgba(255,255,255,.78) inset}
   .dash-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:var(--txt);font-size:11px;font-weight:800;text-transform:uppercase}
@@ -226,6 +232,7 @@
   .dash-empty{color:var(--txt-faint);font-size:12px;padding:5px 0}
   @media (max-width:780px){
     .dashboard{grid-template-columns:1fr;max-height:190px}
+    .dashboard.sized{max-height:none}
     .dash-list{grid-template-columns:1fr}
   }
 </style>
@@ -251,12 +258,15 @@
 
       <!-- edit mode -->
       <button class="btn edit-only" id="addRunBtn">+ Add run</button>
+      <button class="btn edit-only" id="importBtn">Import JSON</button>
+      <input type="file" id="importInput" accept="application/json,.json" style="display:none">
       <button class="btn edit-only" id="cancelBtn">Cancel</button>
       <button class="btn save edit-only" id="saveBtn">Save</button>
     </div>
   </div>
 
   <div class="gantt-scroll" id="scroll"><div class="grid" id="grid"><div class="loading">Loading from your Google Sheet…</div></div></div>
+  <div class="dashboard-resizer" id="dashboardResizer" title="Resize next steps dashboard" aria-hidden="true"></div>
   <div class="dashboard" id="dashboard"></div>
 
   <div class="help">
@@ -509,6 +519,7 @@ function setEditMode(on){
   document.getElementById("saveBtn").disabled=!editMode;
   document.getElementById("cancelBtn").disabled=!editMode;
   document.getElementById("addRunBtn").disabled=!editMode;
+  document.getElementById("importBtn").disabled=!editMode;
   syncUnlockButton();
   refreshStatus();
 }
@@ -603,6 +614,7 @@ async function loadIfVersionChanged(remoteVersion){
 // ---------- render ----------
 const grid=document.getElementById("grid");
 const dashboard=document.getElementById("dashboard");
+const dashboardResizer=document.getElementById("dashboardResizer");
 function trackBg(){
   const jw=new Date(jan1()).getUTCDay();let stops=[];
   for(let k=0;k<7;k++){const wd=(jw+k)%7;const col=(wd===0||wd===6)?"var(--weekend)":"transparent";stops.push(col+" "+(k*dayW)+"px "+((k+1)*dayW)+"px");}
@@ -777,6 +789,60 @@ function render(){
   renderDashboard();
   if(listMode==="recent")lastViewKey=viewKey();
 }
+
+const DASHBOARD_HEIGHT_KEY="cct_dashboard_h";
+const DASHBOARD_MIN_H=72,DASHBOARD_CALENDAR_MIN_H=150;
+let dashboardResize=null;
+function maxDashboardHeight(){
+  const sc=document.getElementById("scroll");
+  const currentDash=dashboard?dashboard.getBoundingClientRect().height:0;
+  const available=(sc?sc.clientHeight:0)+currentDash;
+  if(available>0)return Math.max(DASHBOARD_MIN_H,available-DASHBOARD_CALENDAR_MIN_H);
+  return Math.max(DASHBOARD_MIN_H,Math.floor(window.innerHeight*.55));
+}
+function setDashboardHeight(px,persist){
+  if(!dashboard)return;
+  const h=clamp(Math.round(Number(px)||DASHBOARD_MIN_H),DASHBOARD_MIN_H,maxDashboardHeight());
+  dashboard.classList.add("sized");
+  dashboard.style.setProperty("--dashboard-h",h+"px");
+  if(persist)try{localStorage.setItem(DASHBOARD_HEIGHT_KEY,String(h));}catch(e){}
+}
+function clampDashboardHeightToViewport(){
+  if(!dashboard||!dashboard.classList.contains("sized"))return;
+  setDashboardHeight(dashboard.getBoundingClientRect().height,false);
+}
+function onDashboardResizeMove(e){
+  if(!dashboardResize)return;
+  setDashboardHeight(dashboardResize.startH-(e.clientY-dashboardResize.startY),false);
+}
+function onDashboardResizeEnd(){
+  if(!dashboardResize)return;
+  try{dashboardResizer.releasePointerCapture(dashboardResize.pointerId);}catch(err){}
+  dashboardResize=null;
+  document.body.classList.remove("resizing-dashboard");
+  window.removeEventListener("pointermove",onDashboardResizeMove);
+  window.removeEventListener("pointerup",onDashboardResizeEnd);
+  window.removeEventListener("pointercancel",onDashboardResizeEnd);
+  setDashboardHeight(dashboard.getBoundingClientRect().height,true);
+}
+dashboardResizer.addEventListener("pointerdown",e=>{
+  e.preventDefault();e.stopImmediatePropagation();
+  dashboardResize={
+    pointerId:e.pointerId,
+    startY:e.clientY,
+    startH:dashboard.getBoundingClientRect().height
+  };
+  document.body.classList.add("resizing-dashboard");
+  setDashboardHeight(dashboardResize.startH,false);
+  try{dashboardResizer.setPointerCapture(e.pointerId);}catch(err){}
+  window.addEventListener("pointermove",onDashboardResizeMove);
+  window.addEventListener("pointerup",onDashboardResizeEnd);
+  window.addEventListener("pointercancel",onDashboardResizeEnd);
+});
+try{
+  const storedDashH=Number(localStorage.getItem(DASHBOARD_HEIGHT_KEY));
+  if(Number.isFinite(storedDashH))setDashboardHeight(storedDashH,false);
+}catch(e){}
 
 let labelResize=null;
 function labelResizeTarget(e){
@@ -1198,6 +1264,10 @@ document.getElementById("unlockBtn").onclick=onUnlock;
 document.getElementById("saveBtn").onclick=onSave;
 document.getElementById("cancelBtn").onclick=onCancel;
 document.getElementById("addRunBtn").onclick=()=>openRun(null);
+document.getElementById("importBtn").onclick=()=>{
+  if(!editMode){toast("Unlock to edit before importing.");return;}
+  document.getElementById("importInput").click();
+};
 
 // ---------- toolbar ----------
 function syncListToggle(){
@@ -1291,6 +1361,7 @@ document.getElementById("scroll").addEventListener("scroll",()=>{
   });
 });
 window.addEventListener("resize",()=>{
+  clampDashboardHeightToViewport();
   if(listMode==="recent")render();
 });
 document.getElementById("refreshBtn").onclick=()=>{
@@ -1328,6 +1399,81 @@ function downloadJson(out){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="cell_culture_tracker_backup.json";a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),60000);
 }
+function isValidIsoDate(iso){
+  iso=String(iso||"");
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return false;
+  const parts=iso.split("-").map(Number),y=parts[0],m=parts[1],d=parts[2];
+  const dt=new Date(Date.UTC(y,m-1,d));
+  return dt.getUTCFullYear()===y&&dt.getUTCMonth()===(m-1)&&dt.getUTCDate()===d;
+}
+function optionalImportIso(v,label){
+  const iso=String(v||"").trim();
+  if(!iso)return "";
+  if(!isValidIsoDate(iso))throw new Error(label+" must be a YYYY-MM-DD date.");
+  return iso;
+}
+function requiredImportIso(v,label){
+  const iso=String(v||"").trim();
+  if(!isValidIsoDate(iso))throw new Error(label+" must be a YYYY-MM-DD date.");
+  return iso;
+}
+function importId(v,label,used){
+  let id=String(v||"").trim();
+  if(!id)id=newId();
+  if(used.has(id))throw new Error("Duplicate "+label+" id: "+id);
+  used.add(id);
+  return id;
+}
+function importColor(v,i){
+  const c=String(v||"").trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?([0-9a-f]{2})?$/i.test(c)?c:PALETTE[i%PALETTE.length];
+}
+function normalizeImportedPayload(payload){
+  if(!payload||typeof payload!=="object")throw new Error("Import file must contain a JSON object.");
+  if(!Array.isArray(payload.runs)||!Array.isArray(payload.steps))throw new Error("Import file must contain runs and steps arrays.");
+  const runIds=new Set(),stepIds=new Set();
+  const importedRuns=payload.runs.map((r,i)=>{
+    if(!r||typeof r!=="object")throw new Error("Run "+(i+1)+" is not an object.");
+    const order=Number(r.order);
+    return {
+      id:importId(r.id,"run",runIds),
+      name:String(r.name||""),
+      color:importColor(r.color,i),
+      order:Number.isFinite(order)?order:i+1,
+      stoppedAt:optionalImportIso(r.stoppedAt,"Run "+(i+1)+" stoppedAt")
+    };
+  });
+  const importedSteps=payload.steps.map((s,i)=>{
+    if(!s||typeof s!=="object")throw new Error("Step "+(i+1)+" is not an object.");
+    const rid=String(s.runId||"").trim();
+    if(!runIds.has(rid))throw new Error("Step "+(i+1)+" references missing run id: "+(rid||"(blank)"));
+    const mode=String(s.mode||"").toLowerCase()==="open"?"open":"fixed";
+    const durRaw=Number(s.dur);
+    if(!Number.isFinite(durRaw)||durRaw<0)throw new Error("Step "+(i+1)+" duration must be zero or greater.");
+    return {
+      id:importId(s.id,"step",stepIds),
+      runId:rid,
+      name:String(s.name||""),
+      start:requiredImportIso(s.start,"Step "+(i+1)+" start"),
+      dur:Math.round(durRaw),
+      mode,
+      stoppedAt:mode==="open"?optionalImportIso(s.stoppedAt,"Step "+(i+1)+" stoppedAt"):""
+    };
+  });
+  return {runs:importedRuns,steps:importedSteps};
+}
+function importJsonText(text,fileName){
+  const parsed=normalizeImportedPayload(JSON.parse(text));
+  const name=fileName?(" from "+fileName):"";
+  if(!confirm("Import "+parsed.runs.length+" runs and "+parsed.steps.length+" steps"+name+"?\n\nThis replaces your local draft. Click Save afterward to publish."))return;
+  runsRaw=parsed.runs;
+  stepsRaw=parsed.steps;
+  collapsed.clear();
+  highlightedRows.clear();
+  buildModel();
+  render();
+  toast("Imported JSON into your local draft. Click Save to publish.");
+}
 document.getElementById("exportBtn").onclick=async()=>{
   const btn=document.getElementById("exportBtn"),old=btn.textContent;
   btn.disabled=true;btn.textContent="Exporting...";
@@ -1341,6 +1487,19 @@ document.getElementById("exportBtn").onclick=async()=>{
     downloadJson(exportPayload(source));
   }catch(e){showErr(e);}
   finally{btn.disabled=false;btn.textContent=old;}
+};
+document.getElementById("importInput").onchange=e=>{
+  const input=e.target,file=input.files&&input.files[0];
+  input.value="";
+  if(!file)return;
+  if(!editMode){toast("Unlock to edit before importing.");return;}
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{importJsonText(String(reader.result||""),file.name);}
+    catch(err){toast("Import failed: "+(err&&err.message?err.message:String(err)));}
+  };
+  reader.onerror=()=>toast("Import failed: could not read file.");
+  reader.readAsText(file);
 };
 document.getElementById("helpBtn").onclick=()=>{
   const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cell Culture Tracker Help</title><style>
@@ -1382,6 +1541,7 @@ document.getElementById("helpBtn").onclick=()=>{
     </ul>
     <h2>Backup</h2>
     <p><code>Export JSON</code> downloads the full run and step database, including ids and open-ended step fields. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
+    <p><code>Import JSON</code> is available after unlocking. It replaces your local draft with an exported backup; click <code>Save</code> to publish it.</p>
     <br>
     <p align="center">valentin@westmeyerlab</p>
   </main></body></html>`;
