@@ -708,8 +708,8 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
   const stopBtn=!stopped?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
   let h='<div class="row group'+hi+'" data-run="'+run.id+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+run.id+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
-  h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span>'+stopBtn+'<span class="run-spacer"></span>'+dot;
-  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+run.id+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+run.id+'" title="Edit run">⚙</button></span></div>';
+  h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
+  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+run.id+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+run.id+'" title="Edit run">⚙</button></span>'+stopBtn+dot+'</div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
