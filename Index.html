@@ -240,7 +240,7 @@
       <div class="grp"><label>Year</label><select id="yearSel"></select></div>
       <div class="grp zoom"><label>Zoom</label><button class="btn" id="zoomOut">–</button><input type="text" id="zoomInput" value="100%" aria-label="Zoom percentage"><button class="btn" id="zoomIn">+</button></div>
       <button class="btn" id="jumpToday">Jump to today</button>
-      <div class="grp"><label>List</label><button class="seg active" id="listAll" type="button">All</button><button class="seg" id="listOngoing" type="button">Ongoing</button><button class="seg" id="listRecent" type="button">Recent</button></div>
+      <div class="grp"><label>List</label><button class="seg active" id="listAll" type="button">All</button><button class="seg" id="listOngoing" type="button">Ongoing</button><button class="seg" id="listRecent" type="button">Recent</button><button class="seg" id="listToday" type="button">Do Today</button></div>
       <button class="btn ghost read-only-only" id="refreshBtn" title="Reload from sheet">↻</button>
       <div class="spacer"></div>
       <button class="btn ghost helpbtn" id="helpBtn" title="Help" aria-label="Help">?</button>
@@ -342,6 +342,11 @@ function stepIntersectsRange(s,range){
   const start=dayIndex(s.start),end=stepEndIndex(s);
   return end>range.start && start<range.end;
 }
+function stepScheduledForDate(run,s,iso){
+  if(!run||!s||s.start!==iso)return false;
+  const stopped=runStoppedAt(run);
+  return !(stopped&&isoDay(s.start)>isoDay(stopped));
+}
 const newId=()=>"id_"+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
 
 // ---------- session identity ----------
@@ -378,7 +383,8 @@ let lockTtlMs=20*60*1000;
 let serverOffsetMs=0;
 let lockRefreshQueued=false;
 let metaRefreshQueued=false;
-let listMode=["all","ongoing","recent"].includes(localStorage.getItem("cct_list_mode"))?localStorage.getItem("cct_list_mode"):"all";
+const LIST_MODES=["all","ongoing","recent","today"];
+let listMode=LIST_MODES.includes(localStorage.getItem("cct_list_mode"))?localStorage.getItem("cct_list_mode"):"all";
 let viewRenderQueued=false;
 let lastViewKey="";
 let lastEdit=null;
@@ -412,9 +418,10 @@ function buildModel(){
 const getRun=id=>runs.find(r=>r.id===id);
 const getStep=(rid,sid)=>{const r=getRun(rid);return r&&r.steps.find(s=>s.id===sid);};
 function runBaseSpan(run){
-  if(!run.steps.length)return null;
+  const spanSteps=(run&&run.spanSteps)||(run&&run.steps)||[];
+  if(!spanSteps.length)return null;
   let a=Infinity,b=-Infinity;
-  run.steps.forEach(s=>{const i=dayIndex(s.start);a=Math.min(a,i);b=Math.max(b,stepEndIndex(s));});
+  spanSteps.forEach(s=>{const i=dayIndex(s.start);a=Math.min(a,i);b=Math.max(b,stepEndIndex(s));});
   return{start:a,end:b};
 }
 function runIsOpenCurrent(run){
@@ -542,7 +549,18 @@ function applyMeta(payload){
   setEditMode(editMode);
   if(remoteVersion&&dataVersion&&remoteVersion!==dataVersion)return true;
   if(remoteVersion&&!dataVersion)dataVersion=remoteVersion;
-  if(serverTodayIso&&serverTodayIso!==prevToday&&(stepsRaw.some(isOpenActive)||runsRaw.some(r=>!r.stoppedAt))){buildModel();render();}
+  if(serverTodayIso&&serverTodayIso!==prevToday){
+    if(stepsRaw.some(isOpenActive)||runsRaw.some(r=>!r.stoppedAt))buildModel();
+    if(listMode==="today"){
+      const todayYear=Number(isoToday().slice(0,4));
+      if(year!==todayYear){
+        year=todayYear;
+        ensureYearOption(year);
+        yearSel.value=String(year);
+      }
+    }
+    render();
+  }
   return false;
 }
 
@@ -612,6 +630,12 @@ function viewKey(){
 function runsForRender(){
   if(listMode==="all")return runs;
   if(listMode==="ongoing")return runs.filter(runIsOpenCurrent);
+  if(listMode==="today"){
+    const today=isoToday();
+    return runs
+      .filter(run=>run.steps.some(s=>stepScheduledForDate(run,s,today)))
+      .map(run=>Object.assign({},run,{spanSteps:run.steps,steps:run.steps.filter(s=>stepScheduledForDate(run,s,today))}));
+  }
   const range=currentViewRange();
   return runs
     .filter(run=>(editMode&&run.steps.length===0)||run.steps.some(s=>stepIntersectsRange(s,range)))
@@ -655,6 +679,7 @@ function renderEmptyState(shownRuns){
   if(shownRuns.length)return "";
   if(listMode==="ongoing"&&runs.length)return '<div class="empty-hint"><div class="big">No open-ended runs right now.</div></div>';
   if(listMode==="recent"&&runs.length)return '<div class="empty-hint"><div class="big">No entries in view.</div></div>';
+  if(listMode==="today"&&runs.length)return '<div class="empty-hint"><div class="big">No steps scheduled for today.</div></div>';
   if(editMode)return '<div class="empty-hint"><div class="big">No runs yet.</div>Click <b>+ Add run</b> to start.</div>';
   return '<div class="empty-hint"><div class="big">No runs yet.</div>Click <b>🔓 Unlock to edit</b> to add the first one.</div>';
 }
@@ -715,11 +740,9 @@ function runStartIso(run){
 function dashboardItemsForDate(iso){
   const out=[];
   runs.forEach(run=>{
-    const stopped=runStoppedAt(run);
     const startIso=runStartIso(run);
     run.steps.forEach(s=>{
-      if(s.start!==iso)return;
-      if(stopped&&isoDay(s.start)>isoDay(stopped))return;
+      if(!stepScheduledForDate(run,s,iso))return;
       out.push({run,s,startIso});
     });
   });
@@ -794,13 +817,74 @@ function onLabelResizeEnd(){
   if(listMode==="recent")render();
 }
 
-function toggleRowHighlight(row){
+function highlightKeysForRow(row){
   const rid=row&&row.dataset.run,sid=row&&row.dataset.step;
-  if(!rid)return;
-  const key=sid?stepRowKey(rid,sid):runRowKey(rid);
-  if(highlightedRows.has(key))highlightedRows.delete(key);
-  else highlightedRows.add(key);
+  if(!rid)return [];
+  return sid?[runRowKey(rid),stepRowKey(rid,sid)]:[runRowKey(rid)];
+}
+function highlightsMatch(keys){
+  return highlightedRows.size===keys.length&&keys.every(k=>highlightedRows.has(k));
+}
+function clearHighlights(){
+  if(!highlightedRows.size)return false;
+  highlightedRows.clear();
   render();
+  return true;
+}
+function setHighlights(keys){
+  highlightedRows=new Set(keys.filter(Boolean));
+  render();
+}
+function toggleRowHighlight(row){
+  const keys=highlightKeysForRow(row);
+  if(!keys.length)return;
+  if(highlightsMatch(keys))highlightedRows.clear();
+  else highlightedRows=new Set(keys);
+  render();
+}
+function targetVisibleInCurrentList(rid,iso){
+  if(listMode==="all"||listMode==="recent")return true;
+  const run=getRun(rid);
+  if(!run)return false;
+  if(listMode==="ongoing")return !!runIsOpenCurrent(run);
+  if(listMode==="today")return iso===isoToday();
+  return true;
+}
+function ensureTargetVisibleForFocus(rid,iso){
+  if(targetVisibleInCurrentList(rid,iso))return;
+  listMode="all";
+  localStorage.setItem("cct_list_mode",listMode);
+  syncListToggle();
+}
+function centerRenderedRow(rid,sid){
+  requestAnimationFrame(()=>{
+    const rows=[...grid.querySelectorAll(sid?".row.step":".row.group")];
+    const row=rows.find(el=>el.dataset.run===rid&&(!sid||el.dataset.step===sid));
+    if(!row)return;
+    const sc=document.getElementById("scroll");
+    const max=Math.max(0,sc.scrollHeight-sc.clientHeight);
+    sc.scrollTop=clamp(row.offsetTop-(sc.clientHeight-row.offsetHeight)/2,0,max);
+  });
+}
+function focusDashboardTask(rid,sid,iso){
+  if(!rid||!sid||!iso)return;
+  const y=Number(iso.slice(0,4));
+  if(year!==y){
+    year=y;
+    ensureYearOption(year);
+    yearSel.value=String(year);
+  }
+  if(collapsed.has(rid)){
+    collapsed.delete(rid);
+    buildModel();
+  }
+  ensureTargetVisibleForFocus(rid,iso);
+  setHighlights([runRowKey(rid),stepRowKey(rid,sid)]);
+  centerIso(iso);
+  requestAnimationFrame(()=>{
+    if(listMode==="recent")render();
+    centerRenderedRow(rid,sid);
+  });
 }
 
 // ---------- click handler (collapse/highlight always work; edit actions gated) ----------
@@ -825,15 +909,15 @@ grid.addEventListener("click",e=>{
 
 dashboard.addEventListener("click",e=>{
   const item=e.target.closest(".dash-item");if(!item)return;
-  const iso=item.dataset.date;
-  const y=Number(iso.slice(0,4));
-  if(year!==y){
-    year=y;
-    ensureYearOption(year);
-    yearSel.value=String(year);
-    render();
-  }
-  centerIso(iso);
+  focusDashboardTask(item.dataset.run,item.dataset.step,item.dataset.date);
+});
+
+document.addEventListener("click",e=>{
+  if(!highlightedRows.size)return;
+  if(e.target.closest(".dash-item"))return;
+  const label=e.target.closest(".row .label");
+  if(label&&!e.target.closest("[data-act]"))return;
+  clearHighlights();
 });
 
 // ---------- drag (gated on editMode) ----------
@@ -1120,17 +1204,28 @@ function syncListToggle(){
   document.getElementById("listAll").classList.toggle("active",listMode==="all");
   document.getElementById("listOngoing").classList.toggle("active",listMode==="ongoing");
   document.getElementById("listRecent").classList.toggle("active",listMode==="recent");
+  document.getElementById("listToday").classList.toggle("active",listMode==="today");
 }
 function setListMode(mode){
-  listMode=["all","ongoing","recent"].includes(mode)?mode:"all";
+  listMode=LIST_MODES.includes(mode)?mode:"all";
   localStorage.setItem("cct_list_mode",listMode);
   lastViewKey="";
   syncListToggle();
+  if(listMode==="today"){
+    const todayYear=Number(isoToday().slice(0,4));
+    if(year!==todayYear){
+      year=todayYear;
+      ensureYearOption(year);
+      yearSel.value=String(year);
+    }
+  }
   render();
+  if(listMode==="today")centerToday();
 }
 document.getElementById("listAll").onclick=()=>setListMode("all");
 document.getElementById("listOngoing").onclick=()=>setListMode("ongoing");
 document.getElementById("listRecent").onclick=()=>setListMode("recent");
+document.getElementById("listToday").onclick=()=>setListMode("today");
 syncListToggle();
 
 const yearSel=document.getElementById("yearSel"),thisY=new Date().getFullYear();
@@ -1273,16 +1368,16 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
-      <li><code>NEXT STEPS</code> lists steps starting today and tomorrow.</li>
+      <li><code>NEXT STEPS</code> lists steps starting today and tomorrow. Click one to locate and highlight its run and step rows.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
       <li>Drag the divider between <code>Run / Step</code> and the calendar to resize the label column.</li>
-      <li>Click a run or step label to highlight its calendar row; click again to clear.</li>
+      <li>Click a run or step label to highlight it; click elsewhere to clear the highlight.</li>
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
       <li><code>Jump to today</code> switches to the current year and centres today.</li>
-      <li><code>All</code> shows every run. <code>Ongoing</code> shows open-ended runs active now. <code>Recent</code> shows entries intersecting the visible timeline.</li>
+      <li><code>All</code> shows every run. <code>Ongoing</code> shows open-ended runs active now. <code>Recent</code> shows entries intersecting the visible timeline. <code>Do Today</code> shows groups with steps scheduled for today.</li>
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
