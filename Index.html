@@ -447,9 +447,11 @@ function stepIntersectsRange(s,range){
   return end>range.start && start<range.end;
 }
 function stepScheduledForDate(run,s,iso){
-  if(!run||!s||s.start!==iso)return false;
+  if(!run||!s||!iso)return false;
+  const target=dayIndex(iso),start=dayIndex(s.start),end=stepEndIndex(s);
+  if(!(end>target&&start<=target))return false;
   const stopped=runStoppedAt(run);
-  return !(stopped&&isoDay(s.start)>isoDay(stopped));
+  return !(stopped&&isoDay(iso)>isoDay(stopped));
 }
 const newId=()=>"id_"+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
 
@@ -536,7 +538,14 @@ function runBaseSpan(run){
 }
 function runIsOpenCurrent(run){
   const span=runBaseSpan(run);
-  return !runStoppedAt(run)&&span&&span.start<=dayIndex(isoToday());
+  if(!span)return false;
+  const today=dayIndex(isoToday()),stopped=runStoppedAt(run);
+  const end=stopped?Math.max(span.end,dayIndex(stopped)+1):(span.start<=today?Math.max(span.end,today+1):span.end);
+  return span.start<=today&&end>today;
+}
+function runIsStoppedPast(run){
+  const stopped=runStoppedAt(run);
+  return !!stopped&&isoDay(stopped)<isoDay(isoToday());
 }
 function runSpan(run){
   const span=runBaseSpan(run);
@@ -824,7 +833,7 @@ function renderHeader(N,trackW,shownRuns){
 
 function renderEmptyState(shownRuns){
   if(shownRuns.length)return "";
-  if(listMode==="ongoing"&&runs.length)return '<div class="empty-hint"><div class="big">No open-ended runs right now.</div></div>';
+  if(listMode==="ongoing"&&runs.length)return '<div class="empty-hint"><div class="big">No active runs right now.</div></div>';
   if(listMode==="recent"&&runs.length)return '<div class="empty-hint"><div class="big">No entries in view.</div></div>';
   if(listMode==="today"&&runs.length)return '<div class="empty-hint"><div class="big">No steps scheduled for today.</div></div>';
   if(editMode)return '<div class="empty-hint"><div class="big">No runs yet.</div>Click <b>+ Add run</b> to start.</div>';
@@ -833,10 +842,10 @@ function renderEmptyState(shownRuns){
 
 function renderRunRow(run,trackW,bg,labelMinPx,N){
   const span=runSpan(run);
-  const stopped=runStoppedAt(run),openCurrent=runIsOpenCurrent(run);
+  const stopped=runStoppedAt(run),activeCurrent=runIsOpenCurrent(run),runOpenEnded=activeCurrent&&!stopped,stoppedPast=runIsStoppedPast(run);
   const hi=highlightedRows.has(runRowKey(run.id))?" highlighted":"";
-  const dot=openCurrent?'<span class="run-state-dot open" title="Run is open-ended"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
-  const stopBtn=!stopped?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
+  const dot=activeCurrent?'<span class="run-state-dot open" title="Run is active"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
+  const stopBtn=activeCurrent?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
   let h='<div class="row group'+hi+'" data-run="'+run.id+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+run.id+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
   h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
@@ -844,10 +853,10 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
-    const cls="bar summary"+(openCurrent?" open-ended":"")+(stopped?" stopped":"");
-    const suffix=openCurrent?" (open run)":(stopped?" (stopped)":"");
-    const rightCap=openCurrent?"":'<span class="cap r" style="background:'+run.color+'"></span>';
-    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(openCurrent?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span>'+rightCap+'</div>';
+    const cls="bar summary"+(runOpenEnded?" open-ended":"")+(stoppedPast?" stopped":"");
+    const suffix=runOpenEnded?" (open run)":(stoppedPast?" (stopped)":(activeCurrent?" (active)":""));
+    const rightCap=runOpenEnded?"":'<span class="cap r" style="background:'+run.color+'"></span>';
+    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(runOpenEnded?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span>'+rightCap+'</div>';
   }
   h+='</div></div>';
   if(!run.collapsed)run.steps.forEach(s=>{h+=renderStepRow(run,s,trackW,bg,labelMinPx,N);});
@@ -1737,7 +1746,7 @@ function stopIsoForRun(rid){
 }
 function stopRun(rid,opts){
   const r=runsRaw.find(x=>x.id===rid);
-  if(!r||r.stoppedAt)return;
+  if(!r||runIsStoppedPast(getRun(rid)||r))return;
   const stop=stopIsoForRun(rid);
   r.stoppedAt=stop;
   stepsRaw.forEach(s=>{if(s.runId===rid&&isOpenActive(s))stopStepRecord(s,stop);});
@@ -2157,7 +2166,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
-      <li><code>NEXT STEPS</code> lists steps starting today and tomorrow. Click one to locate and highlight its run and step rows.</li>
+      <li><code>NEXT STEPS</code> lists steps scheduled for today and tomorrow. Click one to locate and highlight its run and step rows.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
@@ -2166,7 +2175,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
       <li><code>Jump to today</code> switches to the current year and centres today.</li>
-      <li><code>All</code> shows every run. <code>Ongoing</code> shows open-ended runs active now. <code>Recent</code> shows entries intersecting the visible timeline. <code>Do Today</code> shows groups with steps scheduled for today.</li>
+      <li><code>All</code> shows every run. <code>Ongoing</code> shows runs active today. <code>Recent</code> shows entries intersecting the visible timeline. <code>Do Today</code> shows groups with steps scheduled for today.</li>
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
