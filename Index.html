@@ -422,6 +422,11 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const WD=["S","M","T","W","T","F","S"];
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const escAttr=esc;
+const safeColor=(v,fallback)=>{
+  const c=String(v||"").trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c)?c:(fallback||PALETTE[0]);
+};
 const fmt=i=>{const d=new Date(jan1()+i*MS);return d.getUTCDate()+" "+MONTHS[d.getUTCMonth()];};
 const isoDay=iso=>{const[y,m,d]=String(iso||dateISO(year,0,1)).split("-").map(Number);return Math.round(Date.UTC(y,m-1,d)/MS);};
 const isoFromDay=day=>new Date(day*MS).toISOString().slice(0,10);
@@ -431,6 +436,7 @@ const isOpen=s=>String(s.mode||"fixed").toLowerCase()==="open";
 const isOpenActive=s=>isOpen(s)&&!s.stoppedAt;
 const isMs=s=>!isOpen(s)&&(s.dur||0)===0;
 const runStoppedAt=r=>String(r&&r.stoppedAt||"");
+const runPlannedEnd=r=>String(r&&r.plannedEnd||"");
 const stopIsoFor=s=>s.stoppedAt||isoToday();
 function stepEndIndex(s){
   const start=dayIndex(s.start);
@@ -448,10 +454,8 @@ function stepIntersectsRange(s,range){
 }
 function stepScheduledForDate(run,s,iso){
   if(!run||!s||!iso)return false;
-  const target=dayIndex(iso),start=dayIndex(s.start),end=stepEndIndex(s);
-  if(!(end>target&&start<=target))return false;
-  const stopped=runStoppedAt(run);
-  return !(stopped&&isoDay(iso)>isoDay(stopped));
+  const stepStart=String(s.start||"").slice(0,10);
+  return stepStart===iso;
 }
 const newId=()=>"id_"+Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,8);
 
@@ -508,7 +512,6 @@ const TEMPLATE_DAY_W=28,TEMPLATE_LABEL_W=120,TEMPLATE_MIN_BAR_W=14;
 
 function reconcileActiveOpenRuns(){
   const activeRunIds=new Set(stepsRaw.filter(isOpenActive).map(s=>s.runId));
-  if(!activeRunIds.size)return false;
   let changed=false;
   runsRaw.forEach(r=>{
     if(r.stoppedAt&&activeRunIds.has(r.id)){
@@ -516,13 +519,31 @@ function reconcileActiveOpenRuns(){
       changed=true;
     }
   });
+  runsRaw.forEach(r=>{
+    const stopped=runStoppedAt(r);
+    if(stopped&&stepsRaw.some(s=>s.runId===r.id&&stepLastIsoDay(s)>isoDay(stopped))){
+      r.stoppedAt="";
+      changed=true;
+    }
+  });
   return changed;
+}
+
+function stepLastIsoDay(s){
+  const start=isoDay(s&&s.start);
+  if(!Number.isFinite(start))return -Infinity;
+  if(isMs(s))return start;
+  if(isOpen(s)){
+    const stopped=s.stoppedAt?isoDay(s.stoppedAt):isoDay(isoToday());
+    return Math.max(start,stopped);
+  }
+  return start+Math.max(Number(s.dur)||1,1)-1;
 }
 
 function buildModel(){
   reconcileActiveOpenRuns();
   const byRun=new Map();
-  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:r.color,order:r.order||0,stoppedAt:String(r.stoppedAt||""),collapsed:collapsed.has(r.id),steps:[]}));
+  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:safeColor(r.color),order:r.order||0,stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||""),collapsed:collapsed.has(r.id),steps:[]}));
   stepsRaw.forEach(s=>{const r=byRun.get(s.runId);if(r)r.steps.push({id:s.id,name:s.name,start:s.start,dur:s.dur||0,mode:s.mode||"fixed",stoppedAt:s.stoppedAt||""});});
   runs=[...byRun.values()].sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name));
   runs.forEach(r=>r.steps.sort((a,b)=>dayIndex(a.start)-dayIndex(b.start)));
@@ -538,9 +559,11 @@ function runBaseSpan(run){
 }
 function runIsOpenCurrent(run){
   const span=runBaseSpan(run);
-  if(!span)return false;
-  const today=dayIndex(isoToday()),stopped=runStoppedAt(run);
-  const end=stopped?Math.max(span.end,dayIndex(stopped)+1):(span.start<=today?Math.max(span.end,today+1):span.end);
+  const stopped=runStoppedAt(run);
+  if(!span)return !stopped;
+  const today=dayIndex(isoToday()),planned=runPlannedEnd(run);
+  if(stopped)return span.start<=today&&dayIndex(stopped)>=today;
+  const end=planned?Math.max(span.end,dayIndex(planned)+1):(span.start<=today?Math.max(span.end,today+1):span.end);
   return span.start<=today&&end>today;
 }
 function runIsStoppedPast(run){
@@ -551,8 +574,9 @@ function runSpan(run){
   const span=runBaseSpan(run);
   if(!span)return null;
   let end=span.end;
-  const stopped=runStoppedAt(run);
-  if(stopped)end=Math.max(end,dayIndex(stopped)+1);
+  const stopped=runStoppedAt(run),planned=runPlannedEnd(run);
+  if(stopped)return{start:span.start,end:Math.max(span.start+1,dayIndex(stopped)+1)};
+  if(planned)end=Math.max(end,dayIndex(planned)+1);
   else if(span.start<=dayIndex(isoToday()))end=Math.max(end,dayIndex(isoToday())+1);
   return{start:span.start,end};
 }
@@ -570,9 +594,11 @@ function normalizeTemplateClient(t){
     id:String(t&&t.id||newId()),
     name:String(t&&t.name||"Untitled template"),
     runName:String(t&&t.runName||t&&t.name||"Untitled run"),
-    color:String(t&&t.color||PALETTE[0]),
+    color:safeColor(t&&t.color,PALETTE[0]),
     runLength:Math.max(1,Math.round(Number(t&&t.runLength)||maxEnd),maxEnd),
-    steps
+    steps,
+    createdAt:Number(t&&t.createdAt)||0,
+    updatedAt:Number(t&&t.updatedAt)||0
   };
 }
 function syncTemplates(list){
@@ -726,7 +752,7 @@ function applyLoad(payload,opts){
   const shouldRender=(opts&&opts.force)||!hadData||!remoteVersion||remoteVersion!==prevVersion;
   if(payload.templates)syncTemplates(payload.templates);
   if(shouldRender){
-    runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||"")}));
+    runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||"")}));
     stepsRaw=payload.steps||[];
     buildModel();render();
   }
@@ -842,21 +868,22 @@ function renderEmptyState(shownRuns){
 
 function renderRunRow(run,trackW,bg,labelMinPx,N){
   const span=runSpan(run);
-  const stopped=runStoppedAt(run),activeCurrent=runIsOpenCurrent(run),runOpenEnded=activeCurrent&&!stopped,stoppedPast=runIsStoppedPast(run);
+  const stopped=runStoppedAt(run),planned=runPlannedEnd(run),activeCurrent=runIsOpenCurrent(run),runOpenEnded=activeCurrent&&!stopped&&!planned,stoppedPast=runIsStoppedPast(run);
+  const rid=escAttr(run.id),color=safeColor(run.color);
   const hi=highlightedRows.has(runRowKey(run.id))?" highlighted":"";
-  const dot=activeCurrent?'<span class="run-state-dot open" title="Run is active"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
-  const stopBtn=activeCurrent?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+run.id+'" title="Stop run line and active open-ended steps">Stop</button>':"";
-  let h='<div class="row group'+hi+'" data-run="'+run.id+'"><div class="label">';
-  h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+run.id+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
-  h+='<span class="swatch" style="background:'+run.color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
-  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+run.id+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+run.id+'" title="Edit run">⚙</button></span>'+stopBtn+dot+'</div>';
+  const dot=(!stopped&&activeCurrent)?'<span class="run-state-dot open" title="Run is active"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
+  const stopBtn=!stopped&&activeCurrent?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+rid+'" title="Stop run line and active open-ended steps">Stop</button>':"";
+  let h='<div class="row group'+hi+'" data-run="'+rid+'"><div class="label">';
+  h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+rid+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
+  h+='<span class="swatch" style="background:'+color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
+  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+rid+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+rid+'" title="Edit run">⚙</button></span>'+stopBtn+dot+'</div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
     const cls="bar summary"+(runOpenEnded?" open-ended":"")+(stoppedPast?" stopped":"");
-    const suffix=runOpenEnded?" (open run)":(stoppedPast?" (stopped)":(activeCurrent?" (active)":""));
-    const rightCap=runOpenEnded?"":'<span class="cap r" style="background:'+run.color+'"></span>';
-    h+='<div class="'+cls+'" data-run="'+run.id+'" data-summary="1" '+(runOpenEnded?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+run.color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+run.color+'"></span>'+rightCap+'</div>';
+    const suffix=runOpenEnded?" (open run)":(stoppedPast?" (stopped)":(activeCurrent?" (active)":(planned?" (planned)":"")));
+    const rightCap=runOpenEnded?"":'<span class="cap r" style="background:'+color+'"></span>';
+    h+='<div class="'+cls+'" data-run="'+rid+'" data-summary="1" '+(runOpenEnded?'data-run-open="1"':"")+' style="left:'+left+'px;width:'+Math.max(w,4)+'px;background:'+color+'" title="'+esc(run.name)+' • '+fmt(span.start)+" → "+fmt(span.end-1)+suffix+'"><span class="cap l" style="background:'+color+'"></span>'+rightCap+'</div>';
   }
   h+='</div></div>';
   if(!run.collapsed)run.steps.forEach(s=>{h+=renderStepRow(run,s,trackW,bg,labelMinPx,N);});
@@ -865,20 +892,21 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
 
 function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   const i0=dayIndex(s.start);
+  const rid=escAttr(run.id),sid=escAttr(s.id),color=safeColor(run.color);
   const hi=highlightedRows.has(stepRowKey(run.id,s.id))?" highlighted":"";
-  const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+run.id+'" data-step="'+s.id+'" title="Stop open-ended step">Stop</button>':"";
+  const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+rid+'" data-step="'+sid+'" title="Stop open-ended step">Stop</button>':"";
   const stopCls=isOpenActive(s)?" has-stop":"";
-  let h='<div class="row step'+hi+'" data-run="'+run.id+'" data-step="'+s.id+'"><div class="label"><span class="nm" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+run.id+'" data-step="'+s.id+'" title="Edit step">⚙</button></span></div>';
+  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label"><span class="nm" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(isMs(s)){
-    if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+run.id+'" data-step="'+s.id+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+run.color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
+    if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+rid+'" data-step="'+sid+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
   } else {
     const end=stepEndIndex(s),days=Math.max(end-i0,1),w=Math.max(days*dayW,6);
     if(i0<N&&end>0){
       const open=isOpen(s),sh=!open&&w>=18,lab=w>labelMinPx?'<span class="nmtxt">'+esc(s.name)+'</span>':"";
       const cls="bar"+(open?" open-ended":"")+(open&&s.stoppedAt?" stopped":"");
       const suffix=open?(isOpenActive(s)?" (open)":" (stopped)"):" ("+days+" d)";
-      h+='<div class="'+cls+'" data-run="'+run.id+'" data-step="'+s.id+'" '+(open?'data-open="1"':"")+' style="left:'+(i0*dayW)+'px;width:'+w+'px;background:'+run.color+'" title="'+esc(s.name)+' • '+fmt(i0)+" → "+fmt(end-1)+suffix+'">'+(sh?'<div class="handle l" data-edge="l"></div>':"")+lab+(sh?'<div class="handle r" data-edge="r"></div>':"")+'</div>';
+      h+='<div class="'+cls+'" data-run="'+rid+'" data-step="'+sid+'" '+(open?'data-open="1"':"")+' style="left:'+(i0*dayW)+'px;width:'+w+'px;background:'+color+'" title="'+esc(s.name)+' • '+fmt(i0)+" → "+fmt(end-1)+suffix+'">'+(sh?'<div class="handle l" data-edge="l"></div>':"")+lab+(sh?'<div class="handle r" data-edge="r"></div>':"")+'</div>';
     }
   }
   return h+'</div></div>';
@@ -914,7 +942,7 @@ function renderDashboard(){
       const startTxt=item.startIso?("started "+fmtIso(item.startIso)):"start unknown";
       const title=esc(item.run.name+" • "+startTxt+" • "+item.s.name+" • "+fmtIso(item.s.start));
       const active=dashboardTaskKey(item.run.id,item.s.id,day.iso)===highlightedDashboardTask;
-      return '<button class="dash-item'+(active?" active":"")+'" type="button" aria-pressed="'+(active?"true":"false")+'" data-date="'+esc(day.iso)+'" data-run="'+item.run.id+'" data-step="'+item.s.id+'" title="'+title+'"><span class="dash-swatch" style="background:'+item.run.color+'"></span><span class="dash-main"><span class="dash-run">'+esc(item.run.name)+'</span><span class="dash-start">'+esc(startTxt)+'</span><span class="dash-step">'+esc(item.s.name)+'</span></span><span class="dash-kind">'+dashboardStepKind(item.s)+'</span></button>';
+      return '<button class="dash-item'+(active?" active":"")+'" type="button" aria-pressed="'+(active?"true":"false")+'" data-date="'+escAttr(day.iso)+'" data-run="'+escAttr(item.run.id)+'" data-step="'+escAttr(item.s.id)+'" title="'+title+'"><span class="dash-swatch" style="background:'+safeColor(item.run.color)+'"></span><span class="dash-main"><span class="dash-run">'+esc(item.run.name)+'</span><span class="dash-start">'+esc(startTxt)+'</span><span class="dash-step">'+esc(item.s.name)+'</span></span><span class="dash-kind">'+dashboardStepKind(item.s)+'</span></button>';
     }).join("")+'</div>':'<div class="dash-empty">No scheduled steps.</div>';
     return '<section class="dash-day"><div class="dash-head">'+day.label+' <span>'+fmtIso(day.iso)+'</span></div>'+body+'</section>';
   }).join("");
@@ -1160,6 +1188,15 @@ grid.addEventListener("click",e=>{
     else if(a==="stoprun")stopRun(rid);
     return;
   }
+  const timelineItem=e.target.closest(".bar,.ms");
+  if(timelineItem&&!editMode){
+    const row=timelineItem.closest(".row");
+    if(row){
+      e.stopPropagation();
+      toggleRowHighlight(row);
+    }
+    return;
+  }
   const label=e.target.closest(".row .label");
   if(!label||labelResizeTarget(e))return;
   toggleRowHighlight(label.closest(".row"));
@@ -1250,11 +1287,11 @@ document.getElementById("runSave").onclick=()=>{
   runModal.classList.remove("open");
   if(runEditId){
     const r=runsRaw.find(x=>x.id===runEditId);
-    if(r){r.name=name;r.color=runColor;}
+    if(r){r.name=name;r.color=safeColor(runColor);}
   } else {
     const id=newId();
     const order=runsRaw.reduce((m,r)=>Math.max(m,r.order||0),0)+1;
-    runsRaw.push({id,name,color:runColor,order,stoppedAt:""});
+    runsRaw.push({id,name,color:safeColor(runColor),order,stoppedAt:"",plannedEnd:""});
   }
   buildModel();render();
 };
@@ -1325,17 +1362,14 @@ function templateCellCenter(day){
 function templateBarGeom(startDay,days){
   const start=Math.max(1,Number(startDay)||1);
   const dur=Math.max(1,Math.round(Number(days)||1));
-  const left=templateCellCenter(start);
-  const width=templateCellCenter(start+dur-1)-left;
-  if(width<=0)return {left:left-TEMPLATE_MIN_BAR_W/2,width:TEMPLATE_MIN_BAR_W};
-  return {left:left,width};
+  return {left:(start-1)*TEMPLATE_DAY_W,width:Math.max(dur*TEMPLATE_DAY_W,TEMPLATE_MIN_BAR_W)};
 }
 function templateRunBackground(color){
-  const c=String(color||PALETTE[0]);
+  const c=safeColor(color);
   return "repeating-linear-gradient(135deg,"+c+" 0 8px,"+TEMPLATE_RUN_CREAM+" 8px 16px)";
 }
 function templateRunBarStyle(color,geom){
-  const c=String(color||PALETTE[0]);
+  const c=safeColor(color);
   return "left:"+geom.left+"px;width:"+geom.width+"px;background:"+templateRunBackground(c)+";border-color:"+c+";box-shadow:0 0 0 1px "+c+",0 1px 0 rgba(255,255,255,.3) inset,0 2px 6px rgba(69,82,110,.18)";
 }
 function templateStepHeadHtml(){
@@ -1384,7 +1418,7 @@ function setTemplateRunLengthDays(days){
 function syncTemplateRunBar(){
   const runBar=document.querySelector("#tmplPreview .template-run-bar");
   if(runBar){
-    const color=document.getElementById("tmplColor").value||PALETTE[0];
+    const color=safeColor(document.getElementById("tmplColor").value);
     const geom=templateBarGeom(1,templateRunLengthValue());
     runBar.style.left=geom.left+"px";
     runBar.style.width=geom.width+"px";
@@ -1439,7 +1473,7 @@ function renderTemplatePreview(){
   if(!preview)return;
   const runLength=templateRunLengthValue();
   setTemplateRunLengthDays(runLength);
-  const color=document.getElementById("tmplColor").value||PALETTE[0];
+  const color=safeColor(document.getElementById("tmplColor").value);
   const steps=templateStepsInTemporalOrder();
   const maxEnd=steps.reduce((m,s)=>Math.max(m,templateStepEnd(s)),runLength);
   const N=Math.max(30,maxEnd+4);
@@ -1571,7 +1605,7 @@ function buildTemplatePayload(){
   return {
     name:templateName,
     runName:templateName,
-    color:document.getElementById("tmplColor").value||PALETTE[0],
+    color:safeColor(document.getElementById("tmplColor").value),
     runLength:Math.max(1,Math.round(Number(document.getElementById("tmplRunLength").value)||maxEnd),maxEnd),
     steps
   };
@@ -1609,9 +1643,10 @@ function placeTemplateRun(t){
   runsRaw.push({
     id:rid,
     name:t.runName||t.name||"Untitled run",
-    color:t.color||PALETTE[0],
+    color:safeColor(t.color),
     order,
-    stoppedAt:addIsoDays(start,Math.max(1,t.runLength||1)-1)
+    stoppedAt:"",
+    plannedEnd:addIsoDays(start,Math.max(1,t.runLength||1)-1)
   });
   t.steps.forEach(s=>{
     stepsRaw.push({
@@ -1738,6 +1773,50 @@ function stopStepRecord(s,stopIso){
   s.stoppedAt=stop;
   s.dur=Math.max(1,isoDay(stop)-isoDay(s.start)+1);
 }
+function runSchedulePastStop(rid,stopIso){
+  const stopDay=isoDay(stopIso);
+  const out={remove:0,truncate:0,names:[]};
+  stepsRaw.forEach(s=>{
+    if(s.runId!==rid)return;
+    const start=isoDay(s.start),last=stepLastIsoDay(s);
+    if(start>stopDay){
+      out.remove++;
+      if(out.names.length<5)out.names.push(s.name||"Untitled step");
+    }else if(last>stopDay){
+      out.truncate++;
+      if(out.names.length<5)out.names.push(s.name||"Untitled step");
+    }
+  });
+  out.total=out.remove+out.truncate;
+  return out;
+}
+function confirmRunTermination(run,stopIso,impact){
+  if(!impact.total)return true;
+  const pieces=[];
+  if(impact.remove)pieces.push(impact.remove+" future step"+(impact.remove===1?"":"s")+" will be removed");
+  if(impact.truncate)pieces.push(impact.truncate+" step"+(impact.truncate===1?"":"s")+" will be shortened to end on "+fmtIso(stopIso));
+  const examples=impact.names.length?("\n\nAffected: "+impact.names.join(", ")+(impact.total>impact.names.length?", ...":"")):"";
+  return confirm(
+    "Stop "+(run.name||"this run")+" on "+fmtIso(stopIso)+"?\n\n"+
+    "There is scheduled work after "+fmtIso(stopIso)+". "+
+    pieces.join("; ")+". The run bar will end on "+fmtIso(stopIso)+"."+examples+
+    "\n\nContinue?"
+  );
+}
+function truncateRunScheduleAt(rid,stopIso){
+  const stopDay=isoDay(stopIso);
+  stepsRaw=stepsRaw.filter(s=>{
+    if(s.runId!==rid)return true;
+    const start=isoDay(s.start);
+    if(start>stopDay)return false;
+    if(isOpen(s)){
+      if(stepLastIsoDay(s)>stopDay)stopStepRecord(s,stopIso);
+    }else if(!isMs(s)&&stepLastIsoDay(s)>stopDay){
+      s.dur=Math.max(1,stopDay-start+1);
+    }
+    return true;
+  });
+}
 function stopIsoForRun(rid){
   const r=getRun(rid);
   const span=r?runBaseSpan(r):null;
@@ -1746,20 +1825,25 @@ function stopIsoForRun(rid){
 }
 function stopRun(rid,opts){
   const r=runsRaw.find(x=>x.id===rid);
-  if(!r||runIsStoppedPast(getRun(rid)||r))return;
+  if(!r||runIsStoppedPast(getRun(rid)||r))return false;
   const stop=stopIsoForRun(rid);
+  const impact=runSchedulePastStop(rid,stop);
+  if(impact.total&&!(opts&&opts.skipFutureConfirm)&&!confirmRunTermination(r,stop,impact))return false;
   r.stoppedAt=stop;
+  r.plannedEnd="";
+  truncateRunScheduleAt(rid,stop);
   stepsRaw.forEach(s=>{if(s.runId===rid&&isOpenActive(s))stopStepRecord(s,stop);});
   if(!opts||!opts.quiet)toast("Stopped run. Save to publish.");
   buildModel();render();
+  return true;
 }
 function maybePromptStopRun(rid,continueMsg){
   const r=runsRaw.find(x=>x.id===rid);
   if(!r||r.stoppedAt||hasActiveOpenSteps(rid))return false;
   const name=r.name||"this run";
   if(confirm("All open-ended steps for "+name+" are stopped.\n\nStop the thin run bar too?")){
-    stopRun(rid,{quiet:true});
-    toast("Run line stopped. Save to publish.");
+    if(stopRun(rid,{quiet:true}))toast("Run line stopped. Save to publish.");
+    else toast("Run line continues.");
     return true;
   }
   toast(continueMsg||"Run line continues.");
@@ -1848,7 +1932,7 @@ async function onSave(){
   try{
     document.getElementById("saveBtn").disabled=true;
     document.getElementById("cancelBtn").disabled=true;
-    const r=await call("saveAll",[sessionId,runsRaw,stepsRaw]);
+    const r=await call("saveAll",[sessionId,runsRaw,stepsRaw,templatesRaw]);
     if(r && r.ok){
       lockInfo=null;
       editMode=false;
@@ -1995,16 +2079,17 @@ function exportPayload(source){
     exportedAt:new Date(serverNow()).toISOString(),
     source,
     schema:{
-      runs:["id","name","color","order","stoppedAt"],
+      runs:["id","name","color","order","stoppedAt","plannedEnd"],
       steps:["id","runId","name","start","dur","mode","stoppedAt"],
-      templates:["id","name","runName","color","runLength","steps"]
+      templates:["id","name","runName","color","runLength","steps","createdAt","updatedAt"]
     },
     runs:runsRaw.map(r=>({
       id:String(r.id||""),
       name:String(r.name||""),
-      color:String(r.color||""),
+      color:safeColor(r.color),
       order:Number(r.order)||0,
-      stoppedAt:String(r.stoppedAt||"")
+      stoppedAt:String(r.stoppedAt||""),
+      plannedEnd:String(r.plannedEnd||"")
     })),
     steps:stepsRaw.map(s=>({
       id:String(s.id||""),
@@ -2019,8 +2104,10 @@ function exportPayload(source){
       id:String(t.id||""),
       name:String(t.name||""),
       runName:String(t.runName||""),
-      color:String(t.color||""),
+      color:safeColor(t.color),
       runLength:Number(t.runLength)||1,
+      createdAt:Number(t.createdAt)||0,
+      updatedAt:Number(t.updatedAt)||0,
       steps:(t.steps||[]).map(s=>({
         id:String(s.id||""),
         name:String(s.name||""),
@@ -2061,8 +2148,40 @@ function importId(v,label,used){
   return id;
 }
 function importColor(v,i){
-  const c=String(v||"").trim();
-  return /^#[0-9a-f]{3}([0-9a-f]{3})?([0-9a-f]{2})?$/i.test(c)?c:PALETTE[i%PALETTE.length];
+  return safeColor(v,PALETTE[i%PALETTE.length]);
+}
+function normalizeImportedTemplates(payload){
+  if(!Object.prototype.hasOwnProperty.call(payload,"templates"))return templatesRaw.map(normalizeTemplateClient);
+  if(!Array.isArray(payload.templates))throw new Error("Import file templates must be an array.");
+  const templateIds=new Set();
+  return payload.templates.map((t,i)=>{
+    if(!t||typeof t!=="object")throw new Error("Template "+(i+1)+" is not an object.");
+    const stepIds=new Set();
+    const stepsRaw=Array.isArray(t.steps)?t.steps:[];
+    const steps=stepsRaw.map((s,j)=>{
+      if(!s||typeof s!=="object")throw new Error("Template "+(i+1)+" step "+(j+1)+" is not an object.");
+      const startDay=Math.max(1,Math.round(Number(s.startDay)||Number(s.day)||1));
+      const durRaw=Number(s.dur);
+      if(!Number.isFinite(durRaw)||durRaw<0)throw new Error("Template "+(i+1)+" step "+(j+1)+" duration must be zero or greater.");
+      return {
+        id:importId(s.id,"template step",stepIds),
+        name:String(s.name||""),
+        startDay,
+        dur:Math.max(0,Math.round(durRaw))
+      };
+    });
+    const maxEnd=steps.reduce((m,s)=>Math.max(m,s.startDay+Math.max(s.dur||1,1)-1),1);
+    return normalizeTemplateClient({
+      id:importId(t.id,"template",templateIds),
+      name:String(t.name||"Untitled template"),
+      runName:String(t.runName||t.name||"Untitled run"),
+      color:importColor(t.color,i),
+      runLength:Math.max(1,Math.round(Number(t.runLength)||maxEnd),maxEnd),
+      createdAt:Number(t.createdAt)||0,
+      updatedAt:Number(t.updatedAt)||0,
+      steps
+    });
+  });
 }
 function normalizeImportedPayload(payload){
   if(!payload||typeof payload!=="object")throw new Error("Import file must contain a JSON object.");
@@ -2071,12 +2190,19 @@ function normalizeImportedPayload(payload){
   const importedRuns=payload.runs.map((r,i)=>{
     if(!r||typeof r!=="object")throw new Error("Run "+(i+1)+" is not an object.");
     const order=Number(r.order);
+    let stoppedAt=optionalImportIso(r.stoppedAt,"Run "+(i+1)+" stoppedAt");
+    let plannedEnd=optionalImportIso(r.plannedEnd,"Run "+(i+1)+" plannedEnd");
+    if(!plannedEnd&&stoppedAt&&isoDay(stoppedAt)>isoDay(isoToday())){
+      plannedEnd=stoppedAt;
+      stoppedAt="";
+    }
     return {
       id:importId(r.id,"run",runIds),
       name:String(r.name||""),
       color:importColor(r.color,i),
       order:Number.isFinite(order)?order:i+1,
-      stoppedAt:optionalImportIso(r.stoppedAt,"Run "+(i+1)+" stoppedAt")
+      stoppedAt,
+      plannedEnd
     };
   });
   const importedSteps=payload.steps.map((s,i)=>{
@@ -2096,19 +2222,22 @@ function normalizeImportedPayload(payload){
       stoppedAt:mode==="open"?optionalImportIso(s.stoppedAt,"Step "+(i+1)+" stoppedAt"):""
     };
   });
-  return {runs:importedRuns,steps:importedSteps};
+  return {runs:importedRuns,steps:importedSteps,templates:normalizeImportedTemplates(payload),hasTemplates:Object.prototype.hasOwnProperty.call(payload,"templates")};
 }
 function importJsonText(text,fileName){
   const parsed=normalizeImportedPayload(JSON.parse(text));
   const name=fileName?(" from "+fileName):"";
-  if(!confirm("Import "+parsed.runs.length+" runs and "+parsed.steps.length+" steps"+name+"?\n\nThis replaces your local draft. Click Save afterward to publish."))return;
+  const templateText=parsed.hasTemplates?(" and "+parsed.templates.length+" templates"):"; templates unchanged";
+  if(!confirm("Import "+parsed.runs.length+" runs, "+parsed.steps.length+" steps"+templateText+name+"?\n\nThis replaces your local draft. Click Save afterward to publish."))return;
   runsRaw=parsed.runs;
   stepsRaw=parsed.steps;
+  templatesRaw=parsed.templates;
   collapsed.clear();
   highlightedRows.clear();
   highlightedDashboardTask="";
   buildModel();
   render();
+  syncTemplateButtons();
   toast("Imported JSON into your local draft. Click Save to publish.");
 }
 document.getElementById("exportBtn").onclick=async()=>{

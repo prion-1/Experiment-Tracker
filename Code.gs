@@ -15,8 +15,8 @@ const PROP_SCHEMA_VERSION = 'GANTT_SCHEMA_VERSION';
 const PROP_DATA_VERSION = 'GANTT_DATA_VERSION';
 const PROP_LAST_EDIT   = 'GANTT_LAST_EDIT';
 const PROP_TIME_ZONE   = 'GANTT_TIME_ZONE';
-const SCHEMA_VERSION   = '4';
-const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt'];
+const SCHEMA_VERSION   = '5';
+const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt', 'plannedEnd'];
 const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version'];
 const EDIT_LOG_HEADERS = ['timestamp', 'editor', 'sessionId', 'runCount', 'stepCount'];
 const TEMPLATES_HEADERS = ['id', 'name', 'runName', 'color', 'runLength', 'stepsJson', 'createdAt', 'updatedAt', 'version'];
@@ -120,6 +120,10 @@ function _ensureSchemaIfNeeded(ss, props) {
   _ensureSchema(ss);
   if ((Number(oldVersion) || 0) < 3) {
     _migrateRunStops(ss);
+    _bumpDataVersion();
+  }
+  if ((Number(oldVersion) || 0) < 5) {
+    _migratePlannedRunEnds(ss);
     _bumpDataVersion();
   }
   props.setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
@@ -237,6 +241,36 @@ function _migrateRunStops(ss) {
   runsSh.getRange(2, runStoppedCol, stoppedValues.length, 1).setValues(stoppedValues);
 }
 
+function _migratePlannedRunEnds(ss) {
+  const tz = _timeZone(ss);
+  const today = _isoDay(_todayIso(tz), tz);
+  const runsSh = ss.getSheetByName(SHEET_NAME_RUNS);
+  if (!runsSh || runsSh.getLastRow() < 2) return;
+
+  const headers = runsSh.getRange(1, 1, 1, runsSh.getLastColumn()).getValues()[0];
+  const stoppedCol = headers.indexOf('stoppedAt') + 1;
+  const plannedCol = headers.indexOf('plannedEnd') + 1;
+  if (!stoppedCol || !plannedCol) return;
+
+  const rows = runsSh.getRange(2, 1, runsSh.getLastRow() - 1, runsSh.getLastColumn()).getValues();
+  const stoppedValues = [];
+  const plannedValues = [];
+  rows.forEach(function (row) {
+    const stoppedRaw = row[stoppedCol - 1];
+    const plannedRaw = row[plannedCol - 1];
+    const stoppedDay = _isoDay(stoppedRaw, tz);
+    if (!plannedRaw && stoppedDay != null && stoppedDay > today) {
+      stoppedValues.push(['']);
+      plannedValues.push([_toIso(stoppedRaw, tz)]);
+    } else {
+      stoppedValues.push([stoppedRaw || '']);
+      plannedValues.push([plannedRaw || '']);
+    }
+  });
+  runsSh.getRange(2, stoppedCol, stoppedValues.length, 1).setValues(stoppedValues);
+  runsSh.getRange(2, plannedCol, plannedValues.length, 1).setValues(plannedValues);
+}
+
 function _props() {
   return PropertiesService.getScriptProperties();
 }
@@ -289,6 +323,11 @@ function _writeLastEditProperty(meta) {
   };
   _props().setProperty(PROP_LAST_EDIT, JSON.stringify(clean));
   return clean;
+}
+
+function _safeColor(v, fallback) {
+  const color = String(v || '').trim();
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color) ? color : (fallback || '#4169e8');
 }
 
 // ----------------------------------------------------------------------------
@@ -364,9 +403,10 @@ function _normalizeRuns(runs, tz) {
     return {
       id: String(r.id || _uid()),
       name: String(r.name || ''),
-      color: String(r.color || ''),
+      color: _safeColor(r.color, ''),
       order: Number(r.order) || 0,
-      stoppedAt: _toIso(r.stoppedAt, tz)
+      stoppedAt: _toIso(r.stoppedAt, tz),
+      plannedEnd: _toIso(r.plannedEnd, tz)
     };
   });
 }
@@ -384,6 +424,32 @@ function _normalizeSteps(steps, tz) {
       stoppedAt: mode === 'open' ? _toIso(s.stoppedAt, tz) : ''
     };
   });
+}
+
+function _stepLastDayForRunState(step, tz, todayDay) {
+  const start = _isoDay(step.start, tz);
+  if (start == null) return null;
+  if (step.mode === 'open') {
+    const stopped = _isoDay(step.stoppedAt, tz);
+    return Math.max(start, stopped == null ? todayDay : stopped);
+  }
+  const dur = Math.max(Number(step.dur) || 0, 0);
+  return start + Math.max(dur || 1, 1) - 1;
+}
+
+function _reconcileStoppedRunsWithSteps(runs, steps, tz) {
+  const todayDay = _isoDay(_todayIso(tz), tz);
+  runs.forEach(function (run) {
+    const stoppedDay = _isoDay(run.stoppedAt, tz);
+    if (stoppedDay == null) return;
+    const hasLaterStep = steps.some(function (step) {
+      if (step.runId !== run.id) return false;
+      const last = _stepLastDayForRunState(step, tz, todayDay);
+      return last != null && last > stoppedDay;
+    });
+    if (hasLaterStep) run.stoppedAt = '';
+  });
+  return runs;
 }
 
 function _normalizeTemplateSteps(steps) {
@@ -416,9 +482,11 @@ function _normalizeTemplateInput(t) {
     id: String(t.id || _uid()),
     name: name,
     runName: String(t.runName || '').trim() || name,
-    color: String(t.color || '#4169e8'),
+    color: _safeColor(t.color, '#4169e8'),
     runLength: Math.max(runLength, maxStepEnd),
-    steps: steps
+    steps: steps,
+    createdAt: Number(t.createdAt) || 0,
+    updatedAt: Number(t.updatedAt) || 0
   };
 }
 
@@ -484,11 +552,12 @@ function _loadPayload(ss) {
   const runsRaw  = _readAll(ss, SHEET_NAME_RUNS);
   const stepsRaw = _readAll(ss, SHEET_NAME_STEPS);
   const meta = _metaPayload();
-  meta.runs = _normalizeRuns(runsRaw, tz).map(function (r) {
+  const normalizedSteps = _normalizeSteps(stepsRaw, tz);
+  meta.runs = _reconcileStoppedRunsWithSteps(_normalizeRuns(runsRaw, tz), normalizedSteps, tz).map(function (r) {
     if (!r.color) r.color = '#44d8e0';
     return r;
   });
-  meta.steps = _normalizeSteps(stepsRaw, tz);
+  meta.steps = normalizedSteps;
   meta.templates = _loadTemplates(ss);
   meta.lastEdit = _readLastEdit(ss);
   meta.todayIso = _todayIso(tz);
@@ -581,7 +650,7 @@ function releaseLock(sessionId) {
 // BATCH WRITE: replaces the entire dataset in one transaction.
 // Only the current lock holder may call this; lock is released on success.
 // ----------------------------------------------------------------------------
-function saveAll(sessionId, runs, steps) {
+function saveAll(sessionId, runs, steps, templates) {
   _checkAccess();
   if (!sessionId) return {ok: false, reason: 'bad_session'};
   const scriptLock = LockService.getScriptLock();
@@ -599,10 +668,10 @@ function saveAll(sessionId, runs, steps) {
     const tz = _timeZone(ss);
     const rSh = ss.getSheetByName(SHEET_NAME_RUNS);
     const sSh = ss.getSheetByName(SHEET_NAME_STEPS);
-    const normalizedRuns = _normalizeRuns(runs, tz);
     const normalizedSteps = _normalizeSteps(steps, tz);
+    const normalizedRuns = _reconcileStoppedRunsWithSteps(_normalizeRuns(runs, tz), normalizedSteps, tz);
     const runRows = normalizedRuns.map(function (r) {
-      return [r.id, r.name, r.color, r.order, '', r.stoppedAt];
+      return [r.id, r.name, r.color, r.order, '', r.stoppedAt, r.plannedEnd];
     });
     const stepRows = normalizedSteps.map(function (s) {
       return [s.id, s.runId, s.name, s.start, s.dur, s.mode, s.stoppedAt, ''];
@@ -615,13 +684,28 @@ function saveAll(sessionId, runs, steps) {
     // Write fresh data.
     if (runRows.length) rSh.getRange(2, 1, runRows.length, RUNS_HEADERS.length).setValues(runRows);
     if (stepRows.length) sSh.getRange(2, 1, stepRows.length, STEPS_HEADERS.length).setValues(stepRows);
+    let normalizedTemplates = _loadTemplates(ss);
+    if (Array.isArray(templates)) {
+      const now = Date.now();
+      const existingById = {};
+      normalizedTemplates.forEach(function (t) { existingById[t.id] = t; });
+      normalizedTemplates = templates.map(function (t) {
+        const normalized = _normalizeTemplateInput(t);
+        const existing = existingById[normalized.id];
+        normalized.createdAt = Number(t.createdAt) || (existing && existing.createdAt) || now;
+        normalized.updatedAt = Number(t.updatedAt) || (existing && existing.updatedAt) || now;
+        return normalized;
+      }).sort(function (a, b) {
+        return a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));
+      });
+      _writeTemplates(ss, normalizedTemplates);
+    }
     const lastEdit = _appendEditLog(ss, cur, normalizedRuns, normalizedSteps);
     SpreadsheetApp.flush();
     _writeLastEditProperty(lastEdit);
     const dataVersion = _bumpDataVersion();
-    const templates = _loadTemplates(ss);
     _clearLock();
-    return _payloadFromNormalized(normalizedRuns, normalizedSteps, null, lastEdit, dataVersion, tz, templates);
+    return _payloadFromNormalized(normalizedRuns, normalizedSteps, null, lastEdit, dataVersion, tz, normalizedTemplates);
   } finally {
     scriptLock.releaseLock();
   }
@@ -659,13 +743,16 @@ function saveTemplate(sessionId, template) {
       return a.name.localeCompare(b.name) || String(a.id).localeCompare(String(b.id));
     });
     _writeTemplates(ss, templates);
+    const lastEdit = _appendEditLog(ss, cur, [], []);
     SpreadsheetApp.flush();
+    _writeLastEditProperty(lastEdit);
     const dataVersion = _bumpDataVersion();
     const meta = _metaPayload();
     meta.ok = true;
     meta.templates = templates;
     meta.dataVersion = dataVersion;
     meta.lock = _readLock();
+    meta.lastEdit = lastEdit;
     return meta;
   } finally {
     scriptLock.releaseLock();
@@ -701,6 +788,7 @@ function _forceSchemaMigration_() {
   const ss = SpreadsheetApp.openById(_props().getProperty(PROP_SS_ID));
   _ensureSchema(ss);
   _migrateRunStops(ss);
+  _migratePlannedRunEnds(ss);
   _bumpDataVersion();
   _props().setProperty(PROP_SCHEMA_VERSION, SCHEMA_VERSION);
 }
