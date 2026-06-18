@@ -110,17 +110,21 @@
   .corner-toggle:hover{border-color:var(--accent);color:var(--accent)}
   .corner-toggle svg{width:11px;height:11px}
   .header-track{position:relative;background:var(--panel);border-bottom:1px solid var(--line-strong)}
-  .month-row{position:relative;height:calc(20px * var(--scale));border-bottom:1px solid var(--line)}
+  .month-row{position:relative;z-index:2;height:calc(20px * var(--scale));border-bottom:1px solid var(--line)}
   .month-cell{position:absolute;top:0;height:100%;display:flex;align-items:center;padding-left:8px;border-left:1px solid var(--line-strong);font-size:.82em;font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:0;overflow:hidden;white-space:nowrap}
-  .weekday-row{position:relative;height:calc(14px * var(--scale));border-bottom:1px solid var(--line)}
-  .weekday-cell{position:absolute;top:0;height:100%;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:.62em;color:var(--txt-dim);text-transform:uppercase;letter-spacing:0;font-weight:500}
+  .weekday-row{position:relative;z-index:2;height:calc(14px * var(--scale));border-bottom:1px solid var(--line)}
+  .weekday-cell{position:absolute;top:0;height:100%;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:.62em;color:var(--txt-dim);text-transform:uppercase;letter-spacing:0;font-weight:500;cursor:pointer}
   .weekday-cell.we{color:var(--txt-faint)}
-  .day-row{position:relative;height:calc(20px * var(--scale))}
-  .day-cell{position:absolute;top:0;height:100%;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:.72em;color:var(--txt-dim);line-height:1}
+  .day-row{position:relative;z-index:2;height:calc(20px * var(--scale))}
+  .day-cell{position:absolute;top:0;height:100%;display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:.72em;color:var(--txt-dim);line-height:1;cursor:pointer}
+  .weekday-cell:hover,.day-cell:hover{background:rgba(65,105,232,.1)}
   .day-cell.we .num{color:var(--txt-faint)}
   .day-cell.today .num{background:var(--today);color:#fff;font-weight:700;min-width:1.6em;height:1.6em;padding:0 .3em;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;box-shadow:0 2px 8px rgba(242,53,114,.32)}
+  .day-column-highlight{position:absolute;top:0;bottom:0;background:rgba(65,105,232,.14);border-left:1px solid rgba(65,105,232,.42);border-right:1px solid rgba(65,105,232,.42);pointer-events:none}
+  .header-track>.day-column-highlight{z-index:1}
 
   .body{position:relative}
+  .body>.day-column-highlight{z-index:5}
   .today-line{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:6;pointer-events:none;opacity:.85;box-shadow:0 0 8px rgba(242,53,114,.35)}
 
   .row{display:flex;height:var(--row-h);position:relative}
@@ -502,6 +506,7 @@ let dataVersion="";
 let templatesRaw=[];
 let highlightedRows=new Set();
 let highlightedDashboardTask="";
+let selectedDayIndex=null;
 let templateDraftSteps=[];
 let selectedTemplateId="";
 
@@ -734,6 +739,7 @@ function applyMeta(payload){
     if(listMode==="today"){
       const todayYear=Number(isoToday().slice(0,4));
       if(year!==todayYear){
+        selectedDayIndex=null;
         year=todayYear;
         ensureYearOption(year);
         yearSel.value=String(year);
@@ -846,13 +852,15 @@ function renderHeader(N,trackW,shownRuns){
   h+='</div><div class="weekday-row">';
   for(let i=0;i<N;i++){
     const dt=new Date(jan1()+i*MS),wd=dt.getUTCDay(),we=(wd===0||wd===6)?"we":"";
-    h+='<div class="weekday-cell '+we+'" style="left:'+(i*dayW)+'px;width:'+dayW+'px">'+WD[wd]+'</div>';
+    const label=fmtIso(isoFromIndex(i));
+    h+='<div class="weekday-cell '+we+'" data-day-index="'+i+'" style="left:'+(i*dayW)+'px;width:'+dayW+'px" title="Select '+label+'">'+WD[wd]+'</div>';
   }
   h+='</div><div class="day-row">';
   const tIso=isoToday(),tIdx=tIso.startsWith(String(year))?dayIndex(tIso):-1;
   for(let i=0;i<N;i++){
     const dt=new Date(jan1()+i*MS),wd=dt.getUTCDay(),we=(wd===0||wd===6)?"we":"",tod=(i===tIdx)?"today":"";
-    h+='<div class="day-cell '+we+' '+tod+'" style="left:'+(i*dayW)+'px;width:'+dayW+'px"><span class="num">'+dt.getUTCDate()+'</span></div>';
+    const label=fmtIso(isoFromIndex(i));
+    h+='<div class="day-cell '+we+' '+tod+'" data-day-index="'+i+'" style="left:'+(i*dayW)+'px;width:'+dayW+'px" title="Select '+label+'"><span class="num">'+dt.getUTCDate()+'</span></div>';
   }
   return h+'</div></div></div>';
 }
@@ -960,8 +968,29 @@ function render(){
   h+=renderEmptyState(shownRuns);
   shownRuns.forEach(run=>{h+=renderRunRow(run,trackW,bg,labelMinPx,N);});
   grid.innerHTML=h+'</div>';
+  syncSelectedDayColumn();
   renderDashboard();
   if(listMode==="recent")lastViewKey=viewKey();
+}
+
+function syncSelectedDayColumn(){
+  grid.querySelectorAll(".day-column-highlight").forEach(el=>el.remove());
+  if(selectedDayIndex===null||selectedDayIndex<0||selectedDayIndex>=daysInYear())return;
+  const left=selectedDayIndex*dayW;
+  const headerTrack=grid.querySelector(".header-track");
+  const body=grid.querySelector(".body");
+  if(headerTrack)headerTrack.insertAdjacentHTML("beforeend",'<div class="day-column-highlight" style="left:'+left+'px;width:'+dayW+'px"></div>');
+  if(body)body.insertAdjacentHTML("beforeend",'<div class="day-column-highlight" style="left:calc(var(--label-w) + '+left+'px);width:'+dayW+'px"></div>');
+}
+function clearSelectedDay(){
+  if(selectedDayIndex===null)return false;
+  selectedDayIndex=null;
+  syncSelectedDayColumn();
+  return true;
+}
+function selectDay(index){
+  selectedDayIndex=clamp(Math.round(Number(index)||0),0,daysInYear()-1);
+  syncSelectedDayColumn();
 }
 
 const DASHBOARD_HEIGHT_KEY="cct_dashboard_h";
@@ -1156,6 +1185,7 @@ function focusDashboardTask(rid,sid,iso){
   if(!rid||!sid||!iso)return;
   const y=Number(iso.slice(0,4));
   if(year!==y){
+    selectedDayIndex=null;
     year=y;
     ensureYearOption(year);
     yearSel.value=String(year);
@@ -1175,6 +1205,13 @@ function focusDashboardTask(rid,sid,iso){
 
 // ---------- click handler (collapse/highlight always work; edit actions gated) ----------
 grid.addEventListener("click",e=>{
+  const dayHeader=e.target.closest(".weekday-cell,.day-cell");
+  if(clearSelectedDay()){
+    if(dayHeader)return;
+  }else if(dayHeader){
+    selectDay(dayHeader.dataset.dayIndex);
+    return;
+  }
   const el=e.target.closest("[data-act]");
   if(el){
     const a=el.dataset.act,rid=el.dataset.run,sid=el.dataset.step;
@@ -1200,6 +1237,10 @@ grid.addEventListener("click",e=>{
   const label=e.target.closest(".row .label");
   if(!label||labelResizeTarget(e))return;
   toggleRowHighlight(label.closest(".row"));
+});
+document.getElementById("scroll").addEventListener("click",e=>{
+  if(e.target.closest("#grid"))return;
+  clearSelectedDay();
 });
 
 dashboard.addEventListener("click",e=>{
@@ -1989,6 +2030,7 @@ function setListMode(mode){
   if(listMode==="today"){
     const todayYear=Number(isoToday().slice(0,4));
     if(year!==todayYear){
+      selectedDayIndex=null;
       year=todayYear;
       ensureYearOption(year);
       yearSel.value=String(year);
@@ -2006,6 +2048,7 @@ syncListToggle();
 const yearSel=document.getElementById("yearSel"),thisY=new Date().getFullYear();
 for(let y=thisY-3;y<=thisY+4;y++){const o=document.createElement("option");o.value=y;o.textContent=y;if(y===year)o.selected=true;yearSel.appendChild(o);}
 yearSel.onchange=()=>{
+  selectedDayIndex=null;
   year=+yearSel.value;
   render();
   if(year===Number(isoToday().slice(0,4)))centerToday();
@@ -2048,6 +2091,7 @@ function centerToday(){centerIso(isoToday());}
 function jumpToToday(){
   const t=isoToday(),todayYear=Number(t.slice(0,4));
   if(year!==todayYear){
+    selectedDayIndex=null;
     year=todayYear;
     ensureYearOption(year);
     yearSel.value=String(year);
@@ -2300,6 +2344,7 @@ document.getElementById("helpBtn").onclick=()=>{
     <h2>Timeline</h2>
     <ul>
       <li>Drag the divider between <code>Run / Step</code> and the calendar to resize the label column.</li>
+      <li>Click a weekday letter or date number to highlight that full day column; click anywhere in the calendar to clear it.</li>
       <li>Click a run or step label to highlight it; click elsewhere to clear the highlight.</li>
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
       <li>Open-ended bars cannot be resized manually.</li>
