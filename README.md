@@ -11,7 +11,7 @@ A Google Apps Script web app for planning and tracking cell-culture runs on an i
 - Export tracker data as JSON
 
 ## Setup
-> [!important]
+> [!tip]
 
 1. Create a standalone project at [Google Apps Script](https://script.google.com/).
 2. Add `Code.gs` and an HTML file named `Index`, then copy in the contents of this repository’s files.
