@@ -12,12 +12,11 @@ A Google Apps Script web app for planning and tracking cell-culture runs on an i
 
 ## Setup
 > [!tip]
-
-1. Create a standalone project at [Google Apps Script](https://script.google.com/).
-2. Add `Code.gs` and an HTML file named `Index`, then copy in the contents of this repository’s files.
-3. Optionally configure `ALLOWED_EMAILS` near the top of `Code.gs`.
-4. Deploy the project as a web app and choose access settings appropriate for your Google Workspace or Google account setup.
-5. Open the deployment URL. The app creates its backing spreadsheet on first use, in the Google Drive of the account under which the script executes.
+> 1. Create a standalone project at [Google Apps Script](https://script.google.com/).
+> 2. Add `Code.gs` and an HTML file named `Index`, then copy in the contents of this repository’s files.
+> 3. Optionally configure `ALLOWED_EMAILS` near the top of `Code.gs`.
+> 4. Deploy the project as a web app and choose access settings appropriate for your Google Workspace or Google account setup.
+> 5. Open the deployment URL. The app creates its backing spreadsheet on first use, in the Google Drive of the account under which the script executes.
 
 The deployment owner must retain access to the generated spreadsheet. When deploying as the user accessing the app, share that spreadsheet with each editor.
 
