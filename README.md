@@ -1,6 +1,6 @@
 # Cell Culture Tracker
 
-A Google Apps Script web app for planning and tracking cell-culture runs on an interactive Gantt chart. Data is stored in a Google Sheet created automatically on first use.
+A Google Apps Script web app for planning and tracking experimental runs (e.g. cell culture) on an interactive Gantt chart. Data is stored in a Google Sheet created automatically on first use.
 
 ## Features
 
