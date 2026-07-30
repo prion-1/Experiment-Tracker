@@ -1,4 +1,4 @@
-# Cell Culture Tracker
+# xTra - Experiment Tracker
 
 A Google Apps Script web app for planning and tracking experimental runs (e.g. cell culture) on an interactive Gantt chart. Data is stored in a Google Sheet created automatically on first use.
 
