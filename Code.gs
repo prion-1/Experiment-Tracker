@@ -1,5 +1,5 @@
 // ============================================================================
-// Cell Culture Tracker — Apps Script backend
+// xTra - Experiment Tracker — Apps Script backend
 // Lock-based collaboration. One editor at a time; others view read-only.
 // All edits during an edit session are batched into a single saveAll() write.
 // Data lives in a Google Sheet the script creates on first use.
@@ -40,7 +40,7 @@ const LOCK_TTL_MS   = 30 * 60 * 1000;  // 30 min — abandoned edit sessions exp
 //   (b) Personal-Gmail or mixed mode: deploy with
 //         "Execute as: User accessing the web app"
 //         "Who has access: Anyone with Google account"
-//       AND share the data sheet ("Cell Culture Tracker — data") with each
+//       AND share the data sheet ("xTra - Experiment Tracker — data") with each
 //       allowed user as Editor.
 //
 // If ALLOWED_EMAILS is empty, the script does not check identity at all.
@@ -70,7 +70,7 @@ function _checkAccess() {
 // ----------------------------------------------------------------------------
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Cell Culture Tracker')
+    .setTitle('xTra - Experiment Tracker')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -87,7 +87,7 @@ function _getSpreadsheet() {
       return ss;
     } catch (e) {
       throw new Error(
-        'Could not open the Cell Culture Tracker data sheet (' + id + '). ' +
+        'Could not open the xTra - Experiment Tracker data sheet (' + id + '). ' +
         'Check that it still exists and that this deployment account can access it. ' +
         'Original error: ' + (e && e.message ? e.message : String(e))
       );
@@ -97,7 +97,7 @@ function _getSpreadsheet() {
 }
 
 function _createSpreadsheet(props) {
-  const ss = SpreadsheetApp.create('Cell Culture Tracker — data');
+  const ss = SpreadsheetApp.create('xTra - Experiment Tracker — data');
   const runs = ss.getActiveSheet();
   runs.setName(SHEET_NAME_RUNS);
   runs.getRange(1, 1, 1, RUNS_HEADERS.length).setValues([RUNS_HEADERS]);
