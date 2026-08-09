@@ -145,6 +145,7 @@
   .row.group .nm{font-weight:600;color:var(--txt);flex:0 1 auto}
   .row.step .label{padding-left:calc(32px * var(--scale))}
   .row.step .nm{color:var(--txt-dim);font-weight:400}
+  .step-note-marker{flex:0 0 1em;color:var(--good);font-family:"JetBrains Mono",monospace;font-size:.78em;font-weight:700;line-height:1;text-align:left}
   .run-state-dot{width:.72em;min-width:.72em;height:.72em;border-radius:50%;margin-left:3px;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 2px 6px rgba(69,82,110,.18)}
   .run-state-dot.open{background:var(--good)}
   .run-state-dot.stopped{background:var(--accent-2)}
@@ -963,9 +964,12 @@ function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   const i0=dayIndex(s.start);
   const rid=escAttr(run.id),sid=escAttr(s.id),color=safeColor(run.color);
   const hi=highlightedRows.has(stepRowKey(run.id,s.id))?" highlighted":"";
+  const hasNote=String(s.metadata==null?"":s.metadata).trim().length>0;
+  const noteMarker=hasNote?'<span class="step-note-marker" title="Step has notes" aria-hidden="true">N</span>':"";
+  const noteAria=hasNote?"; has notes":"";
   const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+rid+'" data-step="'+sid+'" title="Stop open-ended step">Stop</button>':"";
   const stopCls=isOpenActive(s)?" has-stop":"";
-  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label"><span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(s.name)+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
+  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label">'+noteMarker+'<span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(s.name)+noteAria+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(isMs(s)){
     if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+rid+'" data-step="'+sid+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
@@ -1028,6 +1032,27 @@ function metadataSelectionKey(selection){
   if(!selection)return "";
   return selection.type+":"+selection.runId+(selection.type==="step"?":"+selection.stepId:"");
 }
+function syncSelectedStepNoteMarker(){
+  if(!metadataSelection||metadataSelection.type!=="step")return;
+  const row=Array.from(grid.querySelectorAll(".row.step")).find(el=>el.dataset.run===metadataSelection.runId&&el.dataset.step===metadataSelection.stepId);
+  if(!row)return;
+  const label=row.querySelector(".label"),name=label&&label.querySelector(".nm");
+  if(!label||!name)return;
+  let marker=label.querySelector(".step-note-marker");
+  const hasNote=metadataNotes.value.trim().length>0;
+  if(hasNote&&!marker){
+    marker=document.createElement("span");
+    marker.className="step-note-marker";
+    marker.title="Step has notes";
+    marker.setAttribute("aria-hidden","true");
+    marker.textContent="N";
+    label.insertBefore(marker,name);
+  }else if(!hasNote&&marker){
+    marker.remove();
+  }
+  const record=selectedMetadataRecord();
+  name.setAttribute("aria-label","Select notes for "+String(record&&record.name||"Untitled step")+(hasNote?"; has notes":""));
+}
 function renderMetadataPanel(){
   if(!metadataPanel||!metadataNotes)return;
   let record=selectedMetadataRecord();
@@ -1068,8 +1093,14 @@ metadataNotes.addEventListener("input",()=>{
   const record=selectedMetadataRecord();
   if(!editMode||!record)return;
   record.metadata=metadataNotes.value;
+  if(metadataSelection.type==="step"){
+    const modelRun=runs.find(run=>run.id===metadataSelection.runId);
+    const modelStep=modelRun&&modelRun.steps.find(step=>step.id===metadataSelection.stepId);
+    if(modelStep)modelStep.metadata=record.metadata;
+  }
   metadataDirtyKeys.add(metadataSelectionKey(metadataSelection));
   metadataState.textContent="Unsaved · saves with Save";
+  syncSelectedStepNoteMarker();
 });
 
 function render(){
@@ -2719,7 +2750,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
       <li><code>NEXT STEPS</code> appears on the right, with Today above Tomorrow. Click one to locate and highlight its run and step rows.</li>
-      <li>Select a run or step to show its <code>METADATA / NOTES</code> below the timeline. Unlock to edit; <code>Save</code> stores the notes with that entry in the backing sheet.</li>
+      <li>Select a run or step to show its <code>METADATA / NOTES</code> below the timeline. Unlock to edit; <code>Save</code> stores the notes with that entry in the backing sheet. A green <code>N</code> marks steps with notes.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
