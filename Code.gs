@@ -15,11 +15,12 @@ const PROP_SCHEMA_VERSION = 'GANTT_SCHEMA_VERSION';
 const PROP_DATA_VERSION = 'GANTT_DATA_VERSION';
 const PROP_LAST_EDIT   = 'GANTT_LAST_EDIT';
 const PROP_TIME_ZONE   = 'GANTT_TIME_ZONE';
-const SCHEMA_VERSION   = '5';
-const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt', 'plannedEnd'];
-const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version'];
+const SCHEMA_VERSION   = '6';
+const RUNS_HEADERS  = ['id', 'name', 'color', 'order', 'version', 'stoppedAt', 'plannedEnd', 'metadata'];
+const STEPS_HEADERS = ['id', 'runId', 'name', 'start', 'dur', 'mode', 'stoppedAt', 'version', 'metadata'];
 const EDIT_LOG_HEADERS = ['timestamp', 'editor', 'sessionId', 'runCount', 'stepCount'];
 const TEMPLATES_HEADERS = ['id', 'name', 'runName', 'color', 'runLength', 'stepsJson', 'createdAt', 'updatedAt', 'version'];
+const METADATA_MAX_LENGTH = 50000;
 const LOCK_TTL_MS   = 30 * 60 * 1000;  // 30 min — abandoned edit sessions expire
 
 // ----------------------------------------------------------------------------
@@ -166,6 +167,30 @@ function _readAll(ss, name) {
     head.forEach(function (h, i) { o[h] = r[i]; });
     return o;
   });
+}
+
+function _metadataText(value) {
+  const text = String(value == null ? '' : value);
+  if (text.length > METADATA_MAX_LENGTH) {
+    throw new Error('Metadata notes cannot exceed ' + METADATA_MAX_LENGTH + ' characters per entry.');
+  }
+  return text;
+}
+
+function _writeRowsWithMetadata(sh, headers, rows) {
+  if (!rows.length) return;
+  const metadataIndex = headers.indexOf('metadata');
+  const values = rows.map(function (row) {
+    const copy = row.slice();
+    if (metadataIndex >= 0) copy[metadataIndex] = '';
+    return copy;
+  });
+  sh.getRange(2, 1, values.length, headers.length).setValues(values);
+  if (metadataIndex < 0) return;
+  const metadataValues = rows.map(function (row) {
+    return [SpreadsheetApp.newRichTextValue().setText(_metadataText(row[metadataIndex])).build()];
+  });
+  sh.getRange(2, metadataIndex + 1, metadataValues.length, 1).setRichTextValues(metadataValues);
 }
 
 function _toIso(v, tz) {
@@ -406,7 +431,8 @@ function _normalizeRuns(runs, tz) {
       color: _safeColor(r.color, ''),
       order: Number(r.order) || 0,
       stoppedAt: _toIso(r.stoppedAt, tz),
-      plannedEnd: _toIso(r.plannedEnd, tz)
+      plannedEnd: _toIso(r.plannedEnd, tz),
+      metadata: _metadataText(r.metadata)
     };
   });
 }
@@ -421,7 +447,8 @@ function _normalizeSteps(steps, tz) {
       start: _toIso(s.start, tz),
       dur: Number(s.dur) || 0,
       mode: mode,
-      stoppedAt: mode === 'open' ? _toIso(s.stoppedAt, tz) : ''
+      stoppedAt: mode === 'open' ? _toIso(s.stoppedAt, tz) : '',
+      metadata: _metadataText(s.metadata)
     };
   });
 }
@@ -671,10 +698,10 @@ function saveAll(sessionId, runs, steps, templates) {
     const normalizedSteps = _normalizeSteps(steps, tz);
     const normalizedRuns = _reconcileStoppedRunsWithSteps(_normalizeRuns(runs, tz), normalizedSteps, tz);
     const runRows = normalizedRuns.map(function (r) {
-      return [r.id, r.name, r.color, r.order, '', r.stoppedAt, r.plannedEnd];
+      return [r.id, r.name, r.color, r.order, '', r.stoppedAt, r.plannedEnd, r.metadata];
     });
     const stepRows = normalizedSteps.map(function (s) {
-      return [s.id, s.runId, s.name, s.start, s.dur, s.mode, s.stoppedAt, ''];
+      return [s.id, s.runId, s.name, s.start, s.dur, s.mode, s.stoppedAt, '', s.metadata];
     });
 
     // Clear existing data rows (keep headers)
@@ -682,8 +709,8 @@ function saveAll(sessionId, runs, steps, templates) {
     if (sSh.getLastRow() > 1) sSh.getRange(2, 1, sSh.getLastRow() - 1, sSh.getLastColumn()).clearContent();
 
     // Write fresh data.
-    if (runRows.length) rSh.getRange(2, 1, runRows.length, RUNS_HEADERS.length).setValues(runRows);
-    if (stepRows.length) sSh.getRange(2, 1, stepRows.length, STEPS_HEADERS.length).setValues(stepRows);
+    _writeRowsWithMetadata(rSh, RUNS_HEADERS, runRows);
+    _writeRowsWithMetadata(sSh, STEPS_HEADERS, stepRows);
     let normalizedTemplates = _loadTemplates(ss);
     if (Array.isArray(templates)) {
       const now = Date.now();

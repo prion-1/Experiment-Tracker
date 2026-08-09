@@ -39,8 +39,8 @@
   body.dragging{user-select:none;cursor:grabbing}
   body.resizing-labels{user-select:none;cursor:col-resize}
   body.resizing-labels *{cursor:col-resize !important}
-  body.resizing-dashboard{user-select:none;cursor:row-resize}
-  body.resizing-dashboard *{cursor:row-resize !important}
+  body.resizing-metadata{user-select:none;cursor:row-resize}
+  body.resizing-metadata *{cursor:row-resize !important}
   body.resizing-template-editor{user-select:none;cursor:col-resize}
   body.resizing-template-editor *{cursor:col-resize !important}
 
@@ -141,6 +141,7 @@
   .twirl.collapsed svg{transform:rotate(-90deg)}
   .swatch{width:.85em;min-width:.85em;height:.85em;border-radius:3px;box-shadow:0 1px 0 rgba(255,255,255,.15) inset}
   .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.95em}
+  .nm[role=button]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
   .row.group .nm{font-weight:600;color:var(--txt);flex:0 1 auto}
   .row.step .label{padding-left:calc(32px * var(--scale))}
   .row.step .nm{color:var(--txt-dim);font-weight:400}
@@ -273,16 +274,28 @@
   .mode-switch input:checked ~ .mode-open{color:var(--accent)}
   .stopbtn{border:1px solid rgba(242,53,114,.35);background:#fff4f7;color:#b81f55;border-radius:999px;padding:2px 8px;font-size:.78em;font-weight:700;cursor:pointer}
   .stopbtn:hover{background:#ffe5ee}
-  .dashboard-resizer{height:7px;flex:0 0 7px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);cursor:row-resize;position:relative}
-  .dashboard-resizer::before{content:"";position:absolute;left:50%;top:50%;width:42px;height:3px;border-top:1px solid var(--line-strong);border-bottom:1px solid rgba(255,255,255,.9);transform:translate(-50%,-50%);border-radius:999px}
-  .dashboard-resizer:hover::before,body.resizing-dashboard .dashboard-resizer::before{border-top-color:var(--accent)}
-  .dashboard{background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:max-content minmax(0,1fr);align-items:stretch;gap:8px 12px;padding:8px 16px 10px;height:25vh;max-height:none;min-height:var(--dashboard-min-h,72px);overflow:auto;flex:0 0 auto}
-  .dashboard.sized{height:var(--dashboard-h);max-height:none}
-  .dash-title{grid-column:1/-1;align-self:start;color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
+  .workspace{display:grid;grid-template-columns:minmax(0,1fr) clamp(280px,24vw,380px);flex:1;min-width:0;min-height:0}
+  .timeline-pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .metadata-resizer{height:7px;flex:0 0 7px;background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line);cursor:row-resize;position:relative}
+  .metadata-resizer::before{content:"";position:absolute;left:50%;top:50%;width:42px;height:3px;border-top:1px solid var(--line-strong);border-bottom:1px solid rgba(255,255,255,.9);transform:translate(-50%,-50%);border-radius:999px}
+  .metadata-resizer:hover::before,body.resizing-metadata .metadata-resizer::before{border-top-color:var(--accent)}
+  .metadata-panel{height:25vh;min-height:96px;flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:9px 16px 11px;background:var(--panel);box-shadow:0 -1px 0 rgba(255,255,255,.8) inset;overflow:hidden}
+  .metadata-panel.sized{height:var(--metadata-h)}
+  .metadata-header{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;min-width:0}
+  .metadata-heading{min-width:0}
+  .metadata-title{color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
+  .metadata-context{margin-top:3px;color:var(--txt-dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .metadata-state{flex:0 0 auto;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px;line-height:1.3;text-align:right}
+  .metadata-notes{width:100%;min-height:48px;flex:1;resize:none;padding:9px 11px;background:#fff;border:1px solid var(--line-strong);border-radius:8px;color:var(--txt);font:12px/1.45 Inter,system-ui,sans-serif;outline:none;box-shadow:0 1px 0 rgba(255,255,255,.9) inset}
+  .metadata-notes:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(65,105,232,.12)}
+  .metadata-notes:read-only{background:var(--bg-2);color:var(--txt-dim)}
+  .metadata-notes:disabled{background:var(--panel-2);color:var(--txt-faint);cursor:default}
+  .dashboard{min-width:0;min-height:0;background:var(--panel);border-left:1px solid var(--line);box-shadow:1px 0 0 rgba(255,255,255,.8) inset;display:grid;grid-template-columns:1fr;grid-template-rows:max-content repeat(2,minmax(0,1fr));align-items:stretch;gap:8px;padding:10px 12px;overflow:hidden}
+  .dash-title{align-self:start;color:var(--txt);font-size:12px;font-weight:800;line-height:1.2}
   .dash-day{min-width:0;min-height:0;overflow:auto;border:1px solid rgba(38,185,120,.62);border-radius:8px;padding:7px 9px;background:rgba(38,185,120,.035);box-shadow:0 1px 0 rgba(255,255,255,.78) inset}
   .dash-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:var(--txt);font-size:11px;font-weight:800;text-transform:uppercase}
   .dash-head span{color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-weight:500;text-transform:none}
-  .dash-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:5px}
+  .dash-list{display:grid;grid-template-columns:1fr;gap:5px}
   .dash-item{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--bg-2);cursor:pointer;text-align:left;box-shadow:0 1px 0 rgba(255,255,255,.85) inset}
   .dash-item:hover{border-color:var(--accent);background:#fff}
   .dash-item.active{border-color:rgba(240,173,55,.75);background:#fff8dd;box-shadow:0 1px 0 rgba(255,255,255,.85) inset}
@@ -294,10 +307,14 @@
   .dash-step{grid-column:1/-1;color:var(--txt-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dash-kind{margin-left:auto;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:10px;white-space:nowrap}
   .dash-empty{color:var(--txt-faint);font-size:12px;padding:5px 0}
-  @media (max-width:780px){
-    .dashboard{grid-template-columns:1fr;grid-template-rows:max-content repeat(2,minmax(0,1fr))}
-    .dashboard.sized{max-height:none}
-    .dash-list{grid-template-columns:1fr}
+  @media (max-width:900px){
+    .workspace{grid-template-columns:minmax(0,1fr) minmax(240px,32vw)}
+    .dashboard{padding:9px 8px}
+  }
+  @media (max-width:640px){
+    .workspace{display:flex;flex-direction:column;overflow:auto}
+    .timeline-pane{min-height:420px;flex:0 0 65vh}
+    .dashboard{min-height:340px;flex:0 0 340px;border-left:0;border-top:1px solid var(--line);box-shadow:0 1px 0 rgba(255,255,255,.8) inset}
   }
 </style>
 </head><body>
@@ -330,9 +347,23 @@
     </div>
   </div>
 
-  <div class="gantt-scroll" id="scroll"><div class="grid" id="grid"><div class="loading">Loading from your Google Sheet…</div></div></div>
-  <div class="dashboard-resizer" id="dashboardResizer" title="Resize next steps dashboard" aria-hidden="true"></div>
-  <div class="dashboard" id="dashboard"></div>
+  <div class="workspace">
+    <div class="timeline-pane">
+      <div class="gantt-scroll" id="scroll"><div class="grid" id="grid"><div class="loading">Loading from your Google Sheet…</div></div></div>
+      <div class="metadata-resizer" id="metadataResizer" title="Resize metadata notes" aria-hidden="true"></div>
+      <section class="metadata-panel" id="metadataPanel" aria-labelledby="metadataTitle">
+        <div class="metadata-header">
+          <div class="metadata-heading">
+            <div class="metadata-title" id="metadataTitle">METADATA / NOTES</div>
+            <div class="metadata-context" id="metadataContext" aria-live="polite">Select a run or step to view its notes.</div>
+          </div>
+          <div class="metadata-state" id="metadataState">No entry selected</div>
+        </div>
+        <textarea class="metadata-notes" id="metadataNotes" maxlength="50000" aria-labelledby="metadataTitle metadataContext" placeholder="Select a run or step to view its notes." disabled></textarea>
+      </section>
+    </div>
+    <aside class="dashboard" id="dashboard" aria-label="Next steps"></aside>
+  </div>
 
   <div class="help">
     <span><b>Read-only by default.</b> Click <b>Unlock to edit</b> to make changes.</span>
@@ -506,6 +537,8 @@ let dataVersion="";
 let templatesRaw=[];
 let highlightedRows=new Set();
 let highlightedDashboardTask="";
+let metadataSelection=null;
+let metadataDirtyKeys=new Set();
 let selectedDayIndex=null;
 let templateDraftSteps=[];
 let selectedTemplateId="";
@@ -548,8 +581,8 @@ function stepLastIsoDay(s){
 function buildModel(){
   reconcileActiveOpenRuns();
   const byRun=new Map();
-  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:safeColor(r.color),order:r.order||0,stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||""),collapsed:collapsed.has(r.id),steps:[]}));
-  stepsRaw.forEach(s=>{const r=byRun.get(s.runId);if(r)r.steps.push({id:s.id,name:s.name,start:s.start,dur:s.dur||0,mode:s.mode||"fixed",stoppedAt:s.stoppedAt||""});});
+  runsRaw.forEach(r=>byRun.set(r.id,{id:r.id,name:r.name,color:safeColor(r.color),order:r.order||0,stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||""),metadata:String(r.metadata==null?"":r.metadata),collapsed:collapsed.has(r.id),steps:[]}));
+  stepsRaw.forEach(s=>{const r=byRun.get(s.runId);if(r)r.steps.push({id:s.id,name:s.name,start:s.start,dur:s.dur||0,mode:s.mode||"fixed",stoppedAt:s.stoppedAt||"",metadata:String(s.metadata==null?"":s.metadata)});});
   runs=[...byRun.values()].sort((a,b)=>(a.order-b.order)||a.name.localeCompare(b.name));
   runs.forEach(r=>r.steps.sort((a,b)=>dayIndex(a.start)-dayIndex(b.start)));
 }
@@ -696,6 +729,7 @@ function setEditMode(on){
   syncTemplateButtons();
   syncUnlockButton();
   refreshStatus();
+  renderMetadataPanel();
 }
 
 // ---------- server bridge ----------
@@ -758,8 +792,9 @@ function applyLoad(payload,opts){
   const shouldRender=(opts&&opts.force)||!hadData||!remoteVersion||remoteVersion!==prevVersion;
   if(payload.templates)syncTemplates(payload.templates);
   if(shouldRender){
-    runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||"")}));
-    stepsRaw=payload.steps||[];
+    metadataDirtyKeys.clear();
+    runsRaw=(payload.runs||[]).map(r=>Object.assign({},r,{stoppedAt:String(r.stoppedAt||""),plannedEnd:String(r.plannedEnd||""),metadata:String(r.metadata==null?"":r.metadata)}));
+    stepsRaw=(payload.steps||[]).map(s=>Object.assign({},s,{metadata:String(s.metadata==null?"":s.metadata)}));
     buildModel();render();
   }
   setEditMode(editMode); // refresh button states based on new lockInfo
@@ -790,7 +825,11 @@ async function loadIfVersionChanged(remoteVersion){
 // ---------- render ----------
 const grid=document.getElementById("grid");
 const dashboard=document.getElementById("dashboard");
-const dashboardResizer=document.getElementById("dashboardResizer");
+const metadataPanel=document.getElementById("metadataPanel");
+const metadataResizer=document.getElementById("metadataResizer");
+const metadataContext=document.getElementById("metadataContext");
+const metadataState=document.getElementById("metadataState");
+const metadataNotes=document.getElementById("metadataNotes");
 function trackBg(){
   const jw=new Date(jan1()).getUTCDay();let stops=[];
   for(let k=0;k<7;k++){const wd=(jw+k)%7;const col=(wd===0||wd===6)?"var(--weekend)":"transparent";stops.push(col+" "+(k*dayW)+"px "+((k+1)*dayW)+"px");}
@@ -883,7 +922,7 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
   const stopBtn=!stopped&&activeCurrent?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+rid+'" title="Stop run line and active open-ended steps">Stop</button>':"";
   let h='<div class="row group'+hi+'" data-run="'+rid+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+rid+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
-  h+='<span class="swatch" style="background:'+color+'"></span><span class="nm" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
+  h+='<span class="swatch" style="background:'+color+'"></span><span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(run.name)+'" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
   h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+rid+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+rid+'" title="Edit run">⚙</button></span>'+stopBtn+dot+'</div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
@@ -904,7 +943,7 @@ function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   const hi=highlightedRows.has(stepRowKey(run.id,s.id))?" highlighted":"";
   const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+rid+'" data-step="'+sid+'" title="Stop open-ended step">Stop</button>':"";
   const stopCls=isOpenActive(s)?" has-stop":"";
-  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label"><span class="nm" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
+  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label"><span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(s.name)+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(isMs(s)){
     if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+rid+'" data-step="'+sid+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
@@ -954,8 +993,62 @@ function renderDashboard(){
     }).join("")+'</div>':'<div class="dash-empty">No scheduled steps.</div>';
     return '<section class="dash-day"><div class="dash-head">'+day.label+' <span>'+fmtIso(day.iso)+'</span></div>'+body+'</section>';
   }).join("");
-  syncDashboardMinHeight();
 }
+
+function selectedMetadataRecord(){
+  if(!metadataSelection)return null;
+  if(metadataSelection.type==="step"){
+    return stepsRaw.find(s=>s.runId===metadataSelection.runId&&s.id===metadataSelection.stepId)||null;
+  }
+  return runsRaw.find(r=>r.id===metadataSelection.runId)||null;
+}
+function metadataSelectionKey(selection){
+  if(!selection)return "";
+  return selection.type+":"+selection.runId+(selection.type==="step"?":"+selection.stepId:"");
+}
+function renderMetadataPanel(){
+  if(!metadataPanel||!metadataNotes)return;
+  let record=selectedMetadataRecord();
+  if(metadataSelection&&!record){metadataSelection=null;record=null;}
+  if(!record){
+    metadataContext.textContent="Select a run or step to view its notes.";
+    metadataState.textContent="No entry selected";
+    metadataNotes.disabled=true;
+    metadataNotes.readOnly=true;
+    metadataNotes.placeholder="Select a run or step to view its notes.";
+    if(metadataNotes.value)metadataNotes.value="";
+    return;
+  }
+  const run=runsRaw.find(r=>r.id===metadataSelection.runId);
+  const step=metadataSelection.type==="step"?record:null;
+  metadataContext.textContent=step
+    ? "Step · "+String(run&&run.name||"Untitled run")+" / "+String(step.name||"Untitled step")
+    : "Run · "+String(record.name||"Untitled run");
+  metadataState.textContent=editMode
+    ? (metadataDirtyKeys.has(metadataSelectionKey(metadataSelection))?"Unsaved · saves with Save":"Draft · saves with Save")
+    : "Read-only";
+  metadataNotes.disabled=false;
+  metadataNotes.readOnly=!editMode;
+  metadataNotes.placeholder=editMode?"Add notes for this entry…":"No notes saved for this entry.";
+  const value=String(record.metadata==null?"":record.metadata);
+  if(metadataNotes.value!==value)metadataNotes.value=value;
+}
+function selectMetadataEntry(rid,sid){
+  const runId=String(rid||"");
+  const stepId=String(sid||"");
+  const next=stepId
+    ? (stepsRaw.some(s=>s.runId===runId&&s.id===stepId)?{type:"step",runId,stepId}:null)
+    : (runsRaw.some(r=>r.id===runId)?{type:"run",runId}:null);
+  metadataSelection=next;
+  renderMetadataPanel();
+}
+metadataNotes.addEventListener("input",()=>{
+  const record=selectedMetadataRecord();
+  if(!editMode||!record)return;
+  record.metadata=metadataNotes.value;
+  metadataDirtyKeys.add(metadataSelectionKey(metadataSelection));
+  metadataState.textContent="Unsaved · saves with Save";
+});
 
 function render(){
   const N=daysInYear(),trackW=N*dayW;
@@ -970,6 +1063,7 @@ function render(){
   grid.innerHTML=h+'</div>';
   syncSelectedDayColumn();
   renderDashboard();
+  renderMetadataPanel();
   if(listMode==="recent")lastViewKey=viewKey();
 }
 
@@ -993,101 +1087,56 @@ function selectDay(index){
   syncSelectedDayColumn();
 }
 
-const DASHBOARD_HEIGHT_KEY="cct_dashboard_h";
-const DASHBOARD_BASE_MIN_H=72,DASHBOARD_CALENDAR_MIN_H=150;
-let dashboardResize=null;
-function cssPx(v){
-  const n=parseFloat(v);
-  return Number.isFinite(n)?n:0;
+const METADATA_HEIGHT_KEY="cct_metadata_h";
+const METADATA_MIN_H=96,METADATA_CALENDAR_MIN_H=150;
+let metadataResize=null;
+function maxMetadataHeight(){
+  const pane=metadataPanel&&metadataPanel.parentElement;
+  const available=pane?pane.clientHeight-metadataResizer.offsetHeight:0;
+  return Math.max(METADATA_MIN_H,available-METADATA_CALENDAR_MIN_H);
 }
-function boxHeight(el,includeMargins){
-  if(!el)return 0;
-  const cs=getComputedStyle(el);
-  const margins=includeMargins?cssPx(cs.marginTop)+cssPx(cs.marginBottom):0;
-  return el.getBoundingClientRect().height+margins;
+function setMetadataHeight(height,persist){
+  if(!metadataPanel)return;
+  const h=clamp(Math.round(Number(height)||METADATA_MIN_H),METADATA_MIN_H,maxMetadataHeight());
+  metadataPanel.classList.add("sized");
+  metadataPanel.style.setProperty("--metadata-h",h+"px");
+  if(persist)try{localStorage.setItem(METADATA_HEIGHT_KEY,String(h));}catch(e){}
 }
-function dashboardSectionMinHeight(section){
-  const item=section&&section.querySelector(".dash-item");
-  if(!item)return 0;
-  const head=section.querySelector(".dash-head");
-  const cs=getComputedStyle(section);
-  return cssPx(cs.paddingTop)+cssPx(cs.paddingBottom)+cssPx(cs.borderTopWidth)+cssPx(cs.borderBottomWidth)+boxHeight(head,true)+boxHeight(item,false);
+function clampMetadataHeightToViewport(){
+  if(!metadataPanel||!metadataPanel.classList.contains("sized"))return;
+  setMetadataHeight(metadataPanel.getBoundingClientRect().height,false);
 }
-function measuredDashboardMinHeight(){
-  if(!dashboard||!dashboard.querySelector(".dash-item"))return DASHBOARD_BASE_MIN_H;
-  const cs=getComputedStyle(dashboard);
-  const sections=[...dashboard.querySelectorAll(".dash-day")];
-  const sectionMin=sections.reduce((m,section)=>Math.max(m,dashboardSectionMinHeight(section)),0);
-  if(!sectionMin)return DASHBOARD_BASE_MIN_H;
-  const stacked=window.matchMedia("(max-width:780px)").matches;
-  const sectionRows=stacked?sections.length:1;
-  const rowGaps=stacked?sections.length:1;
-  const verticalChrome=cssPx(cs.paddingTop)+cssPx(cs.paddingBottom)+boxHeight(dashboard.querySelector(".dash-title"),true);
-  return Math.ceil(Math.max(DASHBOARD_BASE_MIN_H,verticalChrome+cssPx(cs.rowGap)*rowGaps+sectionMin*sectionRows+2));
+function onMetadataResizeMove(e){
+  if(!metadataResize)return;
+  setMetadataHeight(metadataResize.startH-(e.clientY-metadataResize.startY),false);
 }
-function dashboardMinHeight(){
-  if(!dashboard)return DASHBOARD_BASE_MIN_H;
-  return Math.max(DASHBOARD_BASE_MIN_H,cssPx(dashboard.style.getPropertyValue("--dashboard-min-h")));
+function onMetadataResizeEnd(){
+  if(!metadataResize)return;
+  try{metadataResizer.releasePointerCapture(metadataResize.pointerId);}catch(err){}
+  metadataResize=null;
+  document.body.classList.remove("resizing-metadata");
+  window.removeEventListener("pointermove",onMetadataResizeMove);
+  window.removeEventListener("pointerup",onMetadataResizeEnd);
+  window.removeEventListener("pointercancel",onMetadataResizeEnd);
+  setMetadataHeight(metadataPanel.getBoundingClientRect().height,true);
 }
-function syncDashboardMinHeight(){
-  if(!dashboard)return;
-  const minH=measuredDashboardMinHeight();
-  dashboard.style.setProperty("--dashboard-min-h",minH+"px");
-  if(dashboard.classList.contains("sized")&&dashboard.getBoundingClientRect().height<minH){
-    setDashboardHeight(minH,false);
-  }
-}
-function maxDashboardHeight(){
-  const sc=document.getElementById("scroll");
-  const currentDash=dashboard?dashboard.getBoundingClientRect().height:0;
-  const available=(sc?sc.clientHeight:0)+currentDash;
-  const minH=dashboardMinHeight();
-  if(available>0)return Math.max(minH,available-DASHBOARD_CALENDAR_MIN_H);
-  return Math.max(minH,Math.floor(window.innerHeight*.55));
-}
-function setDashboardHeight(height,persist){
-  if(!dashboard)return;
-  const minH=dashboardMinHeight();
-  const h=clamp(Math.round(Number(height)||minH),minH,maxDashboardHeight());
-  dashboard.classList.add("sized");
-  dashboard.style.setProperty("--dashboard-h",h+"px");
-  if(persist)try{localStorage.setItem(DASHBOARD_HEIGHT_KEY,String(h));}catch(e){}
-}
-function clampDashboardHeightToViewport(){
-  if(!dashboard||!dashboard.classList.contains("sized"))return;
-  setDashboardHeight(dashboard.getBoundingClientRect().height,false);
-}
-function onDashboardResizeMove(e){
-  if(!dashboardResize)return;
-  setDashboardHeight(dashboardResize.startH-(e.clientY-dashboardResize.startY),false);
-}
-function onDashboardResizeEnd(){
-  if(!dashboardResize)return;
-  try{dashboardResizer.releasePointerCapture(dashboardResize.pointerId);}catch(err){}
-  dashboardResize=null;
-  document.body.classList.remove("resizing-dashboard");
-  window.removeEventListener("pointermove",onDashboardResizeMove);
-  window.removeEventListener("pointerup",onDashboardResizeEnd);
-  window.removeEventListener("pointercancel",onDashboardResizeEnd);
-  setDashboardHeight(dashboard.getBoundingClientRect().height,true);
-}
-dashboardResizer.addEventListener("pointerdown",e=>{
+metadataResizer.addEventListener("pointerdown",e=>{
   e.preventDefault();e.stopImmediatePropagation();
-  dashboardResize={
+  metadataResize={
     pointerId:e.pointerId,
     startY:e.clientY,
-    startH:dashboard.getBoundingClientRect().height
+    startH:metadataPanel.getBoundingClientRect().height
   };
-  document.body.classList.add("resizing-dashboard");
-  setDashboardHeight(dashboardResize.startH,false);
-  try{dashboardResizer.setPointerCapture(e.pointerId);}catch(err){}
-  window.addEventListener("pointermove",onDashboardResizeMove);
-  window.addEventListener("pointerup",onDashboardResizeEnd);
-  window.addEventListener("pointercancel",onDashboardResizeEnd);
+  document.body.classList.add("resizing-metadata");
+  setMetadataHeight(metadataResize.startH,false);
+  try{metadataResizer.setPointerCapture(e.pointerId);}catch(err){}
+  window.addEventListener("pointermove",onMetadataResizeMove);
+  window.addEventListener("pointerup",onMetadataResizeEnd);
+  window.addEventListener("pointercancel",onMetadataResizeEnd);
 });
 try{
-  const storedDashH=Number(localStorage.getItem(DASHBOARD_HEIGHT_KEY));
-  if(Number.isFinite(storedDashH))setDashboardHeight(storedDashH,false);
+  const storedMetadataH=Number(localStorage.getItem(METADATA_HEIGHT_KEY));
+  if(Number.isFinite(storedMetadataH))setMetadataHeight(storedMetadataH,false);
 }catch(e){}
 
 let labelResize=null;
@@ -1152,6 +1201,7 @@ function setHighlights(keys,dashboardTask){
 function toggleRowHighlight(row){
   const keys=highlightKeysForRow(row);
   if(!keys.length)return;
+  selectMetadataEntry(row.dataset.run,row.dataset.step);
   highlightedDashboardTask="";
   if(highlightsMatch(keys))highlightedRows.clear();
   else highlightedRows=new Set(keys);
@@ -1183,6 +1233,7 @@ function centerRenderedRow(rid,sid){
 }
 function focusDashboardTask(rid,sid,iso){
   if(!rid||!sid||!iso)return;
+  selectMetadataEntry(rid,sid);
   const y=Number(iso.slice(0,4));
   if(year!==y){
     selectedDayIndex=null;
@@ -1204,6 +1255,14 @@ function focusDashboardTask(rid,sid,iso){
 }
 
 // ---------- click handler (collapse/highlight always work; edit actions gated) ----------
+grid.addEventListener("keydown",e=>{
+  const target=e.target.closest('.row .nm[role="button"]');
+  if(!target||(e.key!=="Enter"&&e.key!==" "))return;
+  const row=target.closest(".row");
+  if(!row)return;
+  e.preventDefault();
+  selectMetadataEntry(row.dataset.run,row.dataset.step);
+});
 grid.addEventListener("click",e=>{
   const dayHeader=e.target.closest(".weekday-cell,.day-cell");
   if(clearSelectedDay()){
@@ -1217,6 +1276,7 @@ grid.addEventListener("click",e=>{
     const a=el.dataset.act,rid=el.dataset.run,sid=el.dataset.step;
     if(a==="toggleVisible"){toggleVisibleRuns();return;}
     if(a==="toggle"){if(collapsed.has(rid))collapsed.delete(rid);else collapsed.add(rid);buildModel();render();return;}
+    selectMetadataEntry(rid,sid);
     if(!editMode)return; // ignore edit actions in read-only mode
     if(a==="addstep")openStep(rid,null);
     else if(a==="editstep")openStep(rid,sid);
@@ -1226,9 +1286,10 @@ grid.addEventListener("click",e=>{
     return;
   }
   const timelineItem=e.target.closest(".bar,.ms");
-  if(timelineItem&&!editMode){
+  if(timelineItem){
     const row=timelineItem.closest(".row");
-    if(row){
+    if(row)selectMetadataEntry(row.dataset.run,row.dataset.step);
+    if(row&&!editMode){
       e.stopPropagation();
       toggleRowHighlight(row);
     }
@@ -1263,6 +1324,7 @@ grid.addEventListener("pointerdown",e=>{
   const handle=e.target.closest(".handle");const node=e.target.closest(".bar,.ms");if(!node)return;
   e.preventDefault();
   const rid=node.dataset.run,sid=node.dataset.step,summary=node.dataset.summary==="1",N=daysInYear();
+  selectMetadataEntry(rid,summary?null:sid);
   if(node.dataset.open==="1"){openStep(rid,sid);return;}
   if(node.dataset.runOpen==="1"){openRun(rid);return;}
   if(summary){
@@ -1325,16 +1387,18 @@ function openRun(id){if(!editMode)return; runEditId=id;const t=document.getEleme
 document.getElementById("runCancel").onclick=()=>runModal.classList.remove("open");
 document.getElementById("runSave").onclick=()=>{
   const name=document.getElementById("runName").value.trim()||"Untitled run";
+  let savedRunId=runEditId;
   runModal.classList.remove("open");
   if(runEditId){
     const r=runsRaw.find(x=>x.id===runEditId);
     if(r){r.name=name;r.color=safeColor(runColor);}
   } else {
     const id=newId();
+    savedRunId=id;
     const order=runsRaw.reduce((m,r)=>Math.max(m,r.order||0),0)+1;
-    runsRaw.push({id,name,color:safeColor(runColor),order,stoppedAt:"",plannedEnd:""});
+    runsRaw.push({id,name,color:safeColor(runColor),order,stoppedAt:"",plannedEnd:"",metadata:""});
   }
-  buildModel();render();
+  buildModel();selectMetadataEntry(savedRunId,null);render();
 };
 document.getElementById("runDelete").onclick=()=>{
   if(!confirm("Delete this run and all its steps?\n\nThis only affects YOUR draft until you Save."))return;
@@ -1342,6 +1406,7 @@ document.getElementById("runDelete").onclick=()=>{
   const id=runEditId;
   runsRaw=runsRaw.filter(r=>r.id!==id);
   stepsRaw=stepsRaw.filter(s=>s.runId!==id);
+  if(metadataSelection&&metadataSelection.runId===id)metadataSelection=null;
   buildModel();render();
 };
 
@@ -1687,7 +1752,8 @@ function placeTemplateRun(t){
     color:safeColor(t.color),
     order,
     stoppedAt:"",
-    plannedEnd:addIsoDays(start,Math.max(1,t.runLength||1)-1)
+    plannedEnd:addIsoDays(start,Math.max(1,t.runLength||1)-1),
+    metadata:""
   });
   t.steps.forEach(s=>{
     stepsRaw.push({
@@ -1697,12 +1763,14 @@ function placeTemplateRun(t){
       start:addIsoDays(start,Math.max(1,s.startDay||1)-1),
       dur:Math.max(0,Math.round(Number(s.dur)||0)),
       mode:"fixed",
-      stoppedAt:""
+      stoppedAt:"",
+      metadata:""
     });
   });
   runModal.classList.remove("open");
   templateSelectModal.classList.remove("open");
   buildModel();
+  selectMetadataEntry(rid,null);
   render();
   centerToday();
   toast("Template placed starting today. Save to publish.");
@@ -1795,16 +1863,18 @@ document.getElementById("stepSave").onclick=()=>{
   const mode=stepOpenBox.checked?"open":"fixed";
   const dur=mode==="open"?0:(msBox.checked?0:Math.max(1,parseInt(document.getElementById("stepDur").value)||1));
   const wasActive=stepEditId?stepsRaw.some(x=>x.id===stepEditId&&x.runId===stepRunId&&isOpenActive(x)):false;
+  let savedStepId=stepEditId;
   stepModal.classList.remove("open");
   if(stepEditId){
     const s=stepsRaw.find(x=>x.id===stepEditId);
     if(s){const keepStopped=mode==="open"&&isOpen(s)?(s.stoppedAt||""):"";s.name=name;s.start=start;s.dur=dur;s.mode=mode;s.stoppedAt=keepStopped;}
   } else {
     const id=newId();
-    stepsRaw.push({id,runId:stepRunId,name,start,dur,mode,stoppedAt:""});
+    savedStepId=id;
+    stepsRaw.push({id,runId:stepRunId,name,start,dur,mode,stoppedAt:"",metadata:""});
   }
   if(wasActive&&!hasActiveOpenSteps(stepRunId)&&maybePromptStopRun(stepRunId,"Updated step. Run line continues."))return;
-  buildModel();render();
+  buildModel();selectMetadataEntry(stepRunId,savedStepId);render();
 };
 function hasActiveOpenSteps(rid){
   return stepsRaw.some(s=>s.runId===rid&&isOpenActive(s));
@@ -1906,6 +1976,7 @@ document.getElementById("stepDelete").onclick=()=>{
   const rid=stepRunId;
   const wasActive=stepsRaw.some(s=>s.id===id&&s.runId===rid&&isOpenActive(s));
   stepsRaw=stepsRaw.filter(s=>s.id!==id);
+  if(metadataSelection&&metadataSelection.type==="step"&&metadataSelection.stepId===id)metadataSelection=null;
   if(wasActive&&!hasActiveOpenSteps(rid)&&maybePromptStopRun(rid,"Deleted step. Run line continues."))return;
   buildModel();render();
 };
@@ -2110,8 +2181,7 @@ document.getElementById("scroll").addEventListener("scroll",()=>{
   });
 });
 window.addEventListener("resize",()=>{
-  syncDashboardMinHeight();
-  clampDashboardHeightToViewport();
+  clampMetadataHeightToViewport();
   if(listMode==="recent")render();
 });
 document.getElementById("refreshBtn").onclick=()=>{
@@ -2123,8 +2193,8 @@ function exportPayload(source){
     exportedAt:new Date(serverNow()).toISOString(),
     source,
     schema:{
-      runs:["id","name","color","order","stoppedAt","plannedEnd"],
-      steps:["id","runId","name","start","dur","mode","stoppedAt"],
+      runs:["id","name","color","order","stoppedAt","plannedEnd","metadata"],
+      steps:["id","runId","name","start","dur","mode","stoppedAt","metadata"],
       templates:["id","name","runName","color","runLength","steps","createdAt","updatedAt"]
     },
     runs:runsRaw.map(r=>({
@@ -2133,7 +2203,8 @@ function exportPayload(source){
       color:safeColor(r.color),
       order:Number(r.order)||0,
       stoppedAt:String(r.stoppedAt||""),
-      plannedEnd:String(r.plannedEnd||"")
+      plannedEnd:String(r.plannedEnd||""),
+      metadata:String(r.metadata==null?"":r.metadata)
     })),
     steps:stepsRaw.map(s=>({
       id:String(s.id||""),
@@ -2142,7 +2213,8 @@ function exportPayload(source){
       start:String(s.start||""),
       dur:Number(s.dur)||0,
       mode:isOpen(s)?"open":"fixed",
-      stoppedAt:isOpen(s)?String(s.stoppedAt||""):""
+      stoppedAt:isOpen(s)?String(s.stoppedAt||""):"",
+      metadata:String(s.metadata==null?"":s.metadata)
     })),
     templates:templatesRaw.map(t=>({
       id:String(t.id||""),
@@ -2193,6 +2265,11 @@ function importId(v,label,used){
 }
 function importColor(v,i){
   return safeColor(v,PALETTE[i%PALETTE.length]);
+}
+function importMetadata(v,label){
+  const text=String(v==null?"":v);
+  if(text.length>50000)throw new Error(label+" metadata cannot exceed 50,000 characters.");
+  return text;
 }
 function normalizeImportedTemplates(payload){
   if(!Object.prototype.hasOwnProperty.call(payload,"templates"))return templatesRaw.map(normalizeTemplateClient);
@@ -2246,7 +2323,8 @@ function normalizeImportedPayload(payload){
       color:importColor(r.color,i),
       order:Number.isFinite(order)?order:i+1,
       stoppedAt,
-      plannedEnd
+      plannedEnd,
+      metadata:importMetadata(r.metadata,"Run "+(i+1))
     };
   });
   const importedSteps=payload.steps.map((s,i)=>{
@@ -2263,7 +2341,8 @@ function normalizeImportedPayload(payload){
       start:requiredImportIso(s.start,"Step "+(i+1)+" start"),
       dur:Math.round(durRaw),
       mode,
-      stoppedAt:mode==="open"?optionalImportIso(s.stoppedAt,"Step "+(i+1)+" stoppedAt"):""
+      stoppedAt:mode==="open"?optionalImportIso(s.stoppedAt,"Step "+(i+1)+" stoppedAt"):"",
+      metadata:importMetadata(s.metadata,"Step "+(i+1))
     };
   });
   return {runs:importedRuns,steps:importedSteps,templates:normalizeImportedTemplates(payload),hasTemplates:Object.prototype.hasOwnProperty.call(payload,"templates")};
@@ -2279,6 +2358,8 @@ function importJsonText(text,fileName){
   collapsed.clear();
   highlightedRows.clear();
   highlightedDashboardTask="";
+  metadataSelection=null;
+  metadataDirtyKeys.clear();
   buildModel();
   render();
   syncTemplateButtons();
@@ -2339,11 +2420,13 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>+</code> on a run adds a step. Fixed steps have a duration; milestones are single-day markers.</li>
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
-      <li><code>NEXT STEPS</code> lists steps scheduled for today and tomorrow. Click one to locate and highlight its run and step rows.</li>
+      <li><code>NEXT STEPS</code> appears on the right, with Today above Tomorrow. Click one to locate and highlight its run and step rows.</li>
+      <li>Select a run or step to show its <code>METADATA / NOTES</code> below the timeline. Unlock to edit the notes; <code>Save</code> publishes them with the rest of the entry.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
       <li>Drag the divider between <code>Run / Step</code> and the calendar to resize the label column.</li>
+      <li>Drag the divider above <code>METADATA / NOTES</code> to resize the notes panel.</li>
       <li>Click a weekday letter or date number to highlight that full day column; click anywhere in the calendar to clear it.</li>
       <li>Click a run or step label to highlight it; click elsewhere to clear the highlight.</li>
       <li>Drag fixed bars to move them; drag their edges to resize them.</li>
