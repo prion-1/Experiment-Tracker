@@ -9,6 +9,7 @@ A Google Apps Script web app for planning and tracking experimental runs (e.g. c
 - See today’s and upcoming work at a glance
 - Keep per-run and per-step metadata notes in the backing sheet
 - Collaborate safely with a single-editor lock and read-only viewers
+- Export a selected date interval as a chronological Markdown lab-book protocol
 - Export tracker data as JSON
 
 ## Setup

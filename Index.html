@@ -193,6 +193,11 @@
   .field{margin-bottom:13px;display:flex;flex-direction:column;gap:6px}
   .field label{font-size:11px;color:var(--txt-dim);text-transform:uppercase;letter-spacing:0;font-weight:700}
   .field input{width:100%}
+  .modal.protocol-modal{width:min(440px,94vw)}
+  .protocol-range{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}
+  .protocol-range .field{margin-bottom:0}
+  .protocol-hint{color:var(--txt-dim);font-size:12px;line-height:1.45}
+  .protocol-error{min-height:18px;margin-top:8px;color:#b81f55;font-size:11px;line-height:1.35}
   .checkrow{flex-direction:row;align-items:center;gap:9px}
   .checkrow input{width:auto}
   .checkrow label{text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--txt);cursor:pointer;font-weight:400}
@@ -316,6 +321,9 @@
     .timeline-pane{min-height:420px;flex:0 0 65vh}
     .dashboard{min-height:340px;flex:0 0 340px;border-left:0;border-top:1px solid var(--line);box-shadow:0 1px 0 rgba(255,255,255,.8) inset}
   }
+  @media (max-width:480px){
+    .protocol-range{grid-template-columns:1fr}
+  }
 </style>
 </head><body>
 <div class="app">
@@ -332,6 +340,7 @@
       <button class="btn ghost read-only-only" id="refreshBtn" title="Reload from sheet">↻</button>
       <div class="spacer"></div>
       <button class="btn ghost helpbtn" id="helpBtn" title="Help" aria-label="Help">?</button>
+      <button class="btn" id="protocolExportBtn" disabled>Export protocol</button>
       <button class="btn ghost" id="exportBtn">Export JSON</button>
 
       <!-- read-only mode -->
@@ -391,6 +400,18 @@
   <div class="field" id="durWrap"><label>Duration (days)</label><input type="number" id="stepDur" min="1" value="1"></div>
   <div class="modal-actions"><button class="btn danger" id="stepDelete" style="display:none">Delete</button><div class="spacer"></div><button class="btn" id="stepCancel">Cancel</button><button class="btn primary" id="stepSave">Save</button></div>
 </div></div>
+
+<!-- protocol export modal -->
+<div class="modal-bg" id="protocolExportModal"><form class="modal protocol-modal" id="protocolExportForm" role="dialog" aria-modal="true" aria-labelledby="protocolExportTitle" aria-describedby="protocolExportHint" tabindex="-1" novalidate>
+  <h3 id="protocolExportTitle">Export protocol</h3>
+  <p class="protocol-hint" id="protocolExportHint">Choose an inclusive date interval. Runs overlapping it will be exported with their chronologically ordered substeps, dates, types, and notes.</p>
+  <div class="protocol-range">
+    <div class="field"><label for="protocolFrom">From</label><input type="date" id="protocolFrom" required></div>
+    <div class="field"><label for="protocolTo">To</label><input type="date" id="protocolTo" required></div>
+  </div>
+  <div class="protocol-error" id="protocolExportError" role="alert" aria-live="polite"></div>
+  <div class="modal-actions"><div class="spacer"></div><button class="btn" type="button" id="protocolExportCancel">Cancel</button><button class="btn primary" type="submit" id="protocolExportConfirm">Export Markdown</button></div>
+</form></div>
 
 <!-- template maker modal -->
 <div class="modal-bg" id="templateMakerModal"><div class="modal wide template-maker-window">
@@ -800,6 +821,7 @@ function applyLoad(payload,opts){
   setEditMode(editMode); // refresh button states based on new lockInfo
   if(!firstLoadDone){
     firstLoadDone=true;
+    document.getElementById("protocolExportBtn").disabled=false;
     setTimeout(()=>jumpToToday(),30);
   }
 }
@@ -2238,6 +2260,14 @@ function downloadJson(out){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="cell_culture_tracker_backup.json";a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),60000);
 }
+function downloadMarkdown(markdown,fileName){
+  const blob=new Blob([String(markdown||"")],{type:"text/markdown;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=fileName;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+}
 function isValidIsoDate(iso){
   iso=String(iso||"");
   if(!/^\d{4}-\d{2}-\d{2}$/.test(iso))return false;
@@ -2255,6 +2285,171 @@ function requiredImportIso(v,label){
   const iso=String(v||"").trim();
   if(!isValidIsoDate(iso))throw new Error(label+" must be a YYYY-MM-DD date.");
   return iso;
+}
+function protocolDateValue(value){
+  const iso=String(value||"").slice(0,10);
+  return isValidIsoDate(iso)?{iso,day:isoDay(iso)}:null;
+}
+function protocolStepRecord(step,index){
+  const start=protocolDateValue(step&&step.start);
+  if(!start)return null;
+  const open=isOpen(step);
+  const dur=Math.max(0,Math.round(Number(step&&step.dur)||0));
+  const stopped=open?protocolDateValue(step&&step.stoppedAt):null;
+  let endDay=start.day,endIso=start.iso;
+  if(open){
+    if(stopped){endDay=Math.max(start.day,stopped.day);endIso=isoFromDay(endDay);}
+    else{endDay=Infinity;endIso="";}
+  }else if(dur>0){
+    endDay=start.day+Math.max(dur,1)-1;
+    endIso=isoFromDay(endDay);
+  }
+  return {step,index,startIso:start.iso,startDay:start.day,endIso,endDay,open,dur,stopped};
+}
+function protocolDataForRange(runList,stepList,fromIso,toIso){
+  const from=protocolDateValue(fromIso),to=protocolDateValue(toIso);
+  if(!from||!to)throw new Error("Choose valid From and To dates.");
+  if(from.day>to.day)throw new Error("The From date must be on or before the To date.");
+  const safeRuns=Array.isArray(runList)?runList:[];
+  const safeSteps=Array.isArray(stepList)?stepList:[];
+  const stepsByRun=new Map();
+  let undatedStepCount=0;
+  safeSteps.forEach((step,index)=>{
+    const record=protocolStepRecord(step,index);
+    if(!record){undatedStepCount++;return;}
+    const runId=String(step&&step.runId||"");
+    if(!stepsByRun.has(runId))stepsByRun.set(runId,[]);
+    stepsByRun.get(runId).push(record);
+  });
+  const undatedRuns=[];
+  const included=[];
+  safeRuns.forEach((run,index)=>{
+    const runId=String(run&&run.id||"");
+    const datedSteps=stepsByRun.get(runId)||[];
+    if(!datedSteps.length){undatedRuns.push(run);return;}
+    const startDay=datedSteps.reduce((earliest,record)=>Math.min(earliest,record.startDay),Infinity);
+    const startIso=isoFromDay(startDay);
+    const stopped=protocolDateValue(run&&run.stoppedAt);
+    if(startDay>to.day||(stopped&&stopped.day<from.day))return;
+    const planned=protocolDateValue(run&&run.plannedEnd);
+    const selectedSteps=datedSteps
+      .filter(record=>record.startDay<=to.day&&record.endDay>=from.day)
+      .slice()
+      .sort((a,b)=>(a.startDay-b.startDay)||(a.index-b.index)||String(a.step.name||"").localeCompare(String(b.step.name||""))||String(a.step.id||"").localeCompare(String(b.step.id||"")));
+    included.push({run,index,startDay,startIso,stopped,planned,steps:selectedSteps,datedStepCount:datedSteps.length});
+  });
+  included.sort((a,b)=>{
+    const aOrder=Number(a.run&&a.run.order),bOrder=Number(b.run&&b.run.order);
+    return (a.startDay-b.startDay)
+      ||((Number.isFinite(aOrder)?aOrder:0)-(Number.isFinite(bOrder)?bOrder:0))
+      ||String(a.run&&a.run.name||"").localeCompare(String(b.run&&b.run.name||""))
+      ||String(a.run&&a.run.id||"").localeCompare(String(b.run&&b.run.id||""))
+      ||(a.index-b.index);
+  });
+  return {from,to,runs:included,undatedRuns,undatedStepCount};
+}
+function protocolInline(value,fallback){
+  let text=String(value==null?"":value).replace(/\s+/g," ").trim()||String(fallback||"");
+  text=text.replace(/\\/g,"\\\\").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return text.replace(/([`*_\[\]])/g,"\\$1");
+}
+function protocolNoteBlock(value){
+  const text=String(value==null?"":value).replace(/\r\n?/g,"\n");
+  if(!text.trim())return "_No notes recorded._";
+  return text.split("\n").map(line=>"> "+line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")).join("\n");
+}
+function protocolStepType(record,todayDay){
+  if(record.open){
+    if(record.stopped)return "Open-ended (stopped)";
+    return record.startDay>todayDay?"Open-ended (planned)":"Open-ended (active)";
+  }
+  if(record.dur===0)return "Milestone";
+  return "Fixed duration ("+record.dur+" calendar day"+(record.dur===1?"":"s")+")";
+}
+function protocolStepDateLine(record,todayDay){
+  if(!record.open&&record.dur===0)return "- **Date:** `"+record.startIso+"`";
+  if(record.open&&!record.stopped){
+    const endText=record.startDay>todayDay?"open-ended; no stop recorded":"ongoing; no stop recorded";
+    return "- **Dates:** `"+record.startIso+"` onward ("+endText+")";
+  }
+  if(record.startIso===record.endIso)return "- **Date:** `"+record.startIso+"`";
+  return "- **Dates:** `"+record.startIso+"` through `"+record.endIso+"` inclusive";
+}
+function protocolStepWindowRelation(record,fromDay,toDay){
+  const relations=[];
+  if(record.startDay<fromDay)relations.push("began before the selected interval");
+  if(record.endDay===Infinity)relations.push("has no recorded stop on or before the interval end and is modeled as open-ended");
+  else if(record.endDay>toDay)relations.push("continued beyond the selected interval");
+  return relations.length?relations.join(" and "):"";
+}
+function buildProtocolMarkdown(fromIso,toIso,options){
+  const opts=options||{};
+  const runList=Array.isArray(opts.runs)?opts.runs:runsRaw;
+  const stepList=Array.isArray(opts.steps)?opts.steps:stepsRaw;
+  const data=protocolDataForRange(runList,stepList,fromIso,toIso);
+  const today=protocolDateValue(opts.todayIso||isoToday())||{iso:isoToday(),day:isoDay(isoToday())};
+  let generated=opts.generatedAt instanceof Date?new Date(opts.generatedAt.getTime()):new Date(opts.generatedAt==null?serverNow():opts.generatedAt);
+  if(Number.isNaN(generated.getTime()))generated=new Date(serverNow());
+  const source=protocolInline(opts.sourceLabel||"Tracker data","Tracker data");
+  const lines=[
+    "# xTra Lab-Book Protocol",
+    "",
+    "- **Selected interval:** `"+data.from.iso+"` through `"+data.to.iso+"` inclusive",
+    "- **Generated:** `"+generated.toISOString()+"`",
+    "- **Source:** "+source,
+    "- **Runs included:** "+data.runs.length,
+    ""
+  ];
+  if(!data.runs.length){
+    lines.push("## No runs found","","_No dated runs overlapped the selected interval._","");
+  }
+  data.runs.forEach((record,runIndex)=>{
+    const run=record.run||{};
+    const status=record.stopped?"Stopped":(record.startDay>today.day?"Planned":"Open / ongoing");
+    lines.push("## "+(runIndex+1)+". "+protocolInline(run.name,"Untitled run"),"");
+    lines.push("- **Tracker status:** "+status);
+    lines.push("- **Recorded start:** `"+record.startIso+"`");
+    if(record.stopped)lines.push("- **Recorded finish:** `"+record.stopped.iso+"`");
+    else lines.push("- **Recorded finish:** _No actual finish recorded._");
+    if(record.planned)lines.push("- **Planned end:** `"+record.planned.iso+"`");
+    lines.push("");
+    if(record.startDay<data.from.day){
+      lines.push("> **Window context:** This run began on `"+record.startIso+"`, before the selected export window started on `"+data.from.iso+"`.","");
+    }
+    if(!record.stopped){
+      const openKind=record.startDay>today.day?"planned/open":"open";
+      lines.push("> **Window context:** No actual finish is recorded on or before the selected export window's end date, `"+data.to.iso+"`; the tracker currently models this run as "+openKind+".","");
+    }else if(record.stopped.day>data.to.day){
+      lines.push("> **Window context:** This run had not finished by the end of the selected export window on `"+data.to.iso+"`. Its recorded finish is `"+record.stopped.iso+"`.","");
+    }
+    lines.push("### Run notes","",protocolNoteBlock(run.metadata),"");
+    lines.push("### Steps in selected interval","");
+    if(!record.steps.length){
+      lines.push("_No substeps were scheduled or recorded in this interval._","");
+    }
+    record.steps.forEach((stepRecord,stepIndex)=>{
+      const step=stepRecord.step||{};
+      const relation=protocolStepWindowRelation(stepRecord,data.from.day,data.to.day);
+      lines.push("#### "+(stepIndex+1)+". "+protocolInline(step.name,"Untitled step"),"");
+      lines.push("- **Type:** "+protocolStepType(stepRecord,today.day));
+      lines.push(protocolStepDateLine(stepRecord,today.day));
+      if(relation)lines.push("- **Window relation:** "+relation);
+      lines.push("","##### Notes","",protocolNoteBlock(step.metadata),"");
+    });
+  });
+  if(data.undatedRuns.length||data.undatedStepCount){
+    lines.push("## Tracker-wide data-quality note","","The interval relevance of these undated entries cannot be determined, so they were not included in the protocol.","");
+    if(data.undatedRuns.length){
+      lines.push("The following run"+(data.undatedRuns.length===1?" was":"s were")+" omitted because no dated substeps were available:","");
+      data.undatedRuns.forEach(run=>lines.push("- "+protocolInline(run&&run.name,"Untitled run")));
+      lines.push("");
+    }
+    if(data.undatedStepCount)lines.push("- Undated substeps omitted: "+data.undatedStepCount,"");
+  }
+  return lines.join("\n").replace(/\n+$/g,"")+"\n";
+}
+function protocolFileName(fromIso,toIso){
+  return "experiment_protocol_"+fromIso+"_to_"+toIso+".md";
 }
 function importId(v,label,used){
   let id=String(v||"").trim();
@@ -2365,6 +2560,109 @@ function importJsonText(text,fileName){
   syncTemplateButtons();
   toast("Imported JSON into your local draft. Click Save to publish.");
 }
+const protocolExportModal=document.getElementById("protocolExportModal");
+const protocolExportForm=document.getElementById("protocolExportForm");
+const protocolFrom=document.getElementById("protocolFrom");
+const protocolTo=document.getElementById("protocolTo");
+const protocolExportError=document.getElementById("protocolExportError");
+const protocolExportConfirm=document.getElementById("protocolExportConfirm");
+const protocolExportCancel=document.getElementById("protocolExportCancel");
+const protocolExportBtn=document.getElementById("protocolExportBtn");
+let protocolExportBusy=false;
+let protocolExportReturnFocus=null;
+function protocolDefaultDate(){
+  if(selectedDayIndex!==null&&selectedDayIndex>=0&&selectedDayIndex<daysInYear())return isoFromIndex(selectedDayIndex);
+  return isoToday();
+}
+function openProtocolExport(){
+  if(protocolExportBusy)return;
+  protocolExportReturnFocus=document.activeElement;
+  const selected=protocolDefaultDate();
+  protocolFrom.value=selected;
+  protocolTo.value=selected;
+  protocolExportError.textContent="";
+  protocolExportModal.classList.add("open");
+  protocolFrom.focus();
+}
+function closeProtocolExport(){
+  if(protocolExportBusy)return;
+  protocolExportModal.classList.remove("open");
+  protocolExportError.textContent="";
+  const returnTarget=protocolExportReturnFocus&&typeof protocolExportReturnFocus.focus==="function"?protocolExportReturnFocus:protocolExportBtn;
+  protocolExportReturnFocus=null;
+  returnTarget.focus();
+}
+protocolExportBtn.onclick=openProtocolExport;
+protocolExportCancel.onclick=closeProtocolExport;
+protocolExportModal.addEventListener("click",e=>{if(e.target===protocolExportModal)closeProtocolExport();});
+document.addEventListener("keydown",e=>{
+  if(!protocolExportModal.classList.contains("open"))return;
+  if(e.key==="Escape"){
+    if(!protocolExportBusy){e.preventDefault();closeProtocolExport();}
+    return;
+  }
+  if(e.key!=="Tab")return;
+  const focusable=Array.from(protocolExportForm.querySelectorAll("input:not([disabled]),button:not([disabled])"));
+  if(!focusable.length){e.preventDefault();protocolExportForm.focus();return;}
+  const first=focusable[0],last=focusable[focusable.length-1];
+  if(e.shiftKey&&(document.activeElement===first||document.activeElement===protocolExportForm||!protocolExportForm.contains(document.activeElement))){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&(document.activeElement===last||document.activeElement===protocolExportForm||!protocolExportForm.contains(document.activeElement))){e.preventDefault();first.focus();}
+});
+[protocolFrom,protocolTo].forEach(input=>input.addEventListener("input",()=>{protocolExportError.textContent="";}));
+protocolExportForm.addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(protocolExportBusy)return;
+  const fromIso=String(protocolFrom.value||""),toIso=String(protocolTo.value||"");
+  if(!isValidIsoDate(fromIso)||!isValidIsoDate(toIso)){
+    protocolExportError.textContent="Choose both From and To dates.";
+    (!isValidIsoDate(fromIso)?protocolFrom:protocolTo).focus();
+    return;
+  }
+  if(isoDay(fromIso)>isoDay(toIso)){
+    protocolExportError.textContent="The From date must be on or before the To date.";
+    protocolTo.focus();
+    return;
+  }
+  protocolExportBusy=true;
+  protocolExportConfirm.disabled=true;
+  protocolExportCancel.disabled=true;
+  protocolExportBtn.disabled=true;
+  protocolFrom.disabled=true;
+  protocolTo.disabled=true;
+  document.getElementById("refreshBtn").disabled=true;
+  document.getElementById("unlockBtn").disabled=true;
+  protocolExportConfirm.textContent="Exporting...";
+  let succeeded=false;
+  try{
+    let sourceLabel="Current local draft (may include unsaved changes)";
+    if(!editMode){
+      const fresh=await call("loadAll",[]);
+      applyLoad(fresh,{force:true});
+      sourceLabel="Saved Google Sheet";
+    }
+    const markdown=buildProtocolMarkdown(fromIso,toIso,{sourceLabel});
+    downloadMarkdown(markdown,protocolFileName(fromIso,toIso));
+    succeeded=true;
+    toast("Protocol exported as Markdown.");
+  }catch(err){
+    console.error(err);
+    const message=err&&err.message?err.message:String(err);
+    protocolExportError.textContent="Export failed: "+message;
+    toast("Protocol export failed: "+message);
+  }finally{
+    protocolExportBusy=false;
+    protocolExportConfirm.disabled=false;
+    protocolExportCancel.disabled=false;
+    protocolExportBtn.disabled=false;
+    protocolFrom.disabled=false;
+    protocolTo.disabled=false;
+    document.getElementById("refreshBtn").disabled=false;
+    syncUnlockButton();
+    protocolExportConfirm.textContent="Export Markdown";
+    if(succeeded)closeProtocolExport();
+    else protocolExportConfirm.focus();
+  }
+});
 document.getElementById("exportBtn").onclick=async()=>{
   const btn=document.getElementById("exportBtn"),old=btn.textContent;
   btn.disabled=true;btn.textContent="Exporting...";
@@ -2436,6 +2734,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
+    <p><code>Export protocol</code> asks for an inclusive date interval and downloads a chronological Markdown report for lab-book use. It includes overlapping runs and substeps, notes, dates, types, and explicit window-boundary context.</p>
     <p><code>Export JSON</code> downloads the run, step, and template database. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
     <p><code>Import JSON</code> is available after unlocking. It replaces your local draft with an exported backup; click <code>Save</code> to publish it.</p>
     <h2>Template Maker</h2>
