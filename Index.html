@@ -2719,7 +2719,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li><code>Open end</code> steps start on the chosen date and extend automatically until stopped.</li>
       <li><code>Stop</code> fixes an active open-ended step or run at today. Save to publish the stop.</li>
       <li><code>NEXT STEPS</code> appears on the right, with Today above Tomorrow. Click one to locate and highlight its run and step rows.</li>
-      <li>Select a run or step to show its <code>METADATA / NOTES</code> below the timeline. Unlock to edit the notes; <code>Save</code> publishes them with the rest of the entry.</li>
+      <li>Select a run or step to show its <code>METADATA / NOTES</code> below the timeline. Unlock to edit; <code>Save</code> stores the notes with that entry in the backing sheet.</li>
     </ul>
     <h2>Timeline</h2>
     <ul>
@@ -2734,7 +2734,7 @@ document.getElementById("helpBtn").onclick=()=>{
       <li>Use <code>Zoom</code> and the year selector to change the calendar view.</li>
     </ul>
     <h2>Backup</h2>
-    <p><code>Export protocol</code> asks for an inclusive date interval and downloads a chronological Markdown report for lab-book use. It includes overlapping runs and substeps, notes, dates, types, and explicit window-boundary context.</p>
+    <p><code>Export protocol</code> asks for an inclusive date interval and downloads a chronological Markdown lab-book report with run and step types, dates, and notes. Runs crossing either interval boundary are identified.</p>
     <p><code>Export JSON</code> downloads the run, step, and template database. In read-only mode it refreshes from the saved sheet first; in edit mode it exports the full local draft.</p>
     <p><code>Import JSON</code> is available after unlocking. It replaces your local draft with an exported backup; click <code>Save</code> to publish it.</p>
     <h2>Template Maker</h2>
