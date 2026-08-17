@@ -146,6 +146,8 @@
   .row.step .label{padding-left:calc(32px * var(--scale))}
   .row.step .nm{color:var(--txt-dim);font-weight:400}
   .step-note-marker{flex:0 0 1em;color:var(--good);font-family:"JetBrains Mono",monospace;font-size:.78em;font-weight:700;line-height:1;text-align:left}
+  .step-day-count,.run-day-count{flex:0 0 auto;color:var(--txt-faint);font-family:"JetBrains Mono",monospace;font-size:.76em;font-variant-numeric:tabular-nums;line-height:1;white-space:nowrap}
+  .run-day-count{color:var(--txt-dim);font-weight:500}
   .run-state-dot{width:.72em;min-width:.72em;height:.72em;border-radius:50%;margin-left:3px;box-shadow:0 0 0 2px rgba(255,255,255,.85),0 2px 6px rgba(69,82,110,.18)}
   .run-state-dot.open{background:var(--good)}
   .run-state-dot.stopped{background:var(--accent-2)}
@@ -505,6 +507,7 @@ function stepEndIndex(s){
   return start+Math.max(s.dur||1,1);
 }
 function stepDurationDays(s){return Math.max(stepEndIndex(s)-dayIndex(s.start),1);}
+function stepDayCrossings(s){return Math.max(stepDurationDays(s)-1,0);}
 function stepIntersectsRange(s,range){
   const start=dayIndex(s.start),end=stepEndIndex(s);
   return end>range.start && start<range.end;
@@ -635,7 +638,7 @@ function runSpan(run){
   if(!span)return null;
   let end=span.end;
   const stopped=runStoppedAt(run),planned=runPlannedEnd(run);
-  if(stopped)return{start:span.start,end:Math.max(span.start+1,dayIndex(stopped)+1)};
+  if(stopped)return span;
   if(planned)end=Math.max(end,dayIndex(planned)+1);
   else if(span.start<=dayIndex(isoToday()))end=Math.max(end,dayIndex(isoToday())+1);
   return{start:span.start,end};
@@ -943,10 +946,12 @@ function renderRunRow(run,trackW,bg,labelMinPx,N){
   const hi=highlightedRows.has(runRowKey(run.id))?" highlighted":"";
   const dot=(!stopped&&activeCurrent)?'<span class="run-state-dot open" title="Run is active"></span>':(stopped?'<span class="run-state-dot stopped" title="Run stopped '+esc(stopped)+'"></span>':"");
   const stopBtn=!stopped&&activeCurrent?'<button class="stopbtn run-stop edit-only" data-act="stoprun" data-run="'+rid+'" title="Stop run line and active open-ended steps">Stop</button>':"";
+  const dayCrossings=span?Math.max(span.end-span.start-1,0):null;
+  const dayLabel=span?'<span class="run-day-count" title="Total run length: '+dayCrossings+' calendar day'+(dayCrossings===1?'':'s')+'">'+dayCrossings+' d</span>':"";
   let h='<div class="row group'+hi+'" data-run="'+rid+'"><div class="label">';
   h+='<button class="twirl '+(run.collapsed?"collapsed":"")+'" data-act="toggle" data-run="'+rid+'"><svg viewBox="0 0 10 10"><path d="M2 1 L8 5 L2 9 Z" fill="currentColor"/></svg></button>';
   h+='<span class="swatch" style="background:'+color+'"></span><span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(run.name)+'" title="'+esc(run.name)+'">'+esc(run.name)+'</span><span class="run-spacer"></span>';
-  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+rid+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+rid+'" title="Edit run">⚙</button></span>'+stopBtn+dot+'</div>';
+  h+='<span class="lbl-actions"><button class="iconbtn" data-act="addstep" data-run="'+rid+'" title="Add step">+</button><button class="iconbtn" data-act="editrun" data-run="'+rid+'" title="Edit run">⚙</button></span>'+stopBtn+dayLabel+dot+'</div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(span){
     const left=span.start*dayW,w=(span.end-span.start)*dayW;
@@ -969,7 +974,9 @@ function renderStepRow(run,s,trackW,bg,labelMinPx,N){
   const noteAria=hasNote?"; has notes":"";
   const stopBtn=isOpenActive(s)?'<button class="stopbtn" data-act="stopstep" data-run="'+rid+'" data-step="'+sid+'" title="Stop open-ended step">Stop</button>':"";
   const stopCls=isOpenActive(s)?" has-stop":"";
-  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label">'+noteMarker+'<span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(s.name)+noteAria+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span><span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
+  const dayCrossings=stepDayCrossings(s);
+  const dayLabel=isMs(s)?"":'<span class="step-day-count" title="'+dayCrossings+' calendar day'+(dayCrossings===1?'':'s')+' elapsed">'+dayCrossings+' d</span>';
+  let h='<div class="row step'+hi+'" data-run="'+rid+'" data-step="'+sid+'"><div class="label">'+noteMarker+'<span class="nm" tabindex="0" role="button" aria-label="Select notes for '+escAttr(s.name)+noteAria+'" title="'+esc(s.name)+'">'+esc(s.name)+'</span>'+dayLabel+'<span class="lbl-actions'+stopCls+'">'+stopBtn+'<button class="iconbtn" data-act="editstep" data-run="'+rid+'" data-step="'+sid+'" title="Edit step">⚙</button></span></div>';
   h+='<div class="track" style="width:'+trackW+'px;'+bg+'">';
   if(isMs(s)){
     if(i0>=0&&i0<N)h+='<div class="ms" data-run="'+rid+'" data-step="'+sid+'" style="left:'+(i0*dayW+dayW/2)+'px;background:'+color+'" title="◆ '+esc(s.name)+' • '+fmt(i0)+'"></div>';
